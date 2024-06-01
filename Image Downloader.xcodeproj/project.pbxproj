@@ -44,6 +44,7 @@
 		448856FF2B3AB4BA007B55EC /* Image DownloaderUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Image DownloaderUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		448857032B3AB4BA007B55EC /* Image_DownloaderUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Image_DownloaderUITests.swift; sourceTree = "<group>"; };
 		448857052B3AB4BA007B55EC /* Image_DownloaderUITestsLaunchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Image_DownloaderUITestsLaunchTests.swift; sourceTree = "<group>"; };
+		44D3E1DC2B3B45F900738644 /* Image-Downloader-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "Image-Downloader-Info.plist"; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -94,6 +95,7 @@
 		448856E72B3AB4B9007B55EC /* Image Downloader */ = {
 			isa = PBXGroup;
 			children = (
+				44D3E1DC2B3B45F900738644 /* Image-Downloader-Info.plist */,
 				448856E82B3AB4B9007B55EC /* Image_DownloaderApp.swift */,
 				448856EA2B3AB4B9007B55EC /* ContentView.swift */,
 				448856EC2B3AB4BA007B55EC /* Assets.xcassets */,
@@ -143,6 +145,8 @@
 			dependencies = (
 			);
 			name = "Image Downloader";
+			packageProductDependencies = (
+			);
 			productName = "Image Downloader";
 			productReference = 448856E52B3AB4B9007B55EC /* Image Downloader.app */;
 			productType = "com.apple.product-type.application";
@@ -215,6 +219,8 @@
 				Base,
 			);
 			mainGroup = 448856DC2B3AB4B9007B55EC;
+			packageReferences = (
+			);
 			productRefGroup = 448856E62B3AB4B9007B55EC /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -420,6 +426,9 @@
 				DEVELOPMENT_TEAM = 8DVDW4Q338;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Image-Downloader-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "苯苯存图";
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "请您允许App保存照片到相册，否则下载功能将无法使用。";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -429,10 +438,11 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 0.1.3;
 				PRODUCT_BUNDLE_IDENTIFIER = "None.Image-Downloader";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_ENABLE_BATCH_MODE = NO;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -449,6 +459,9 @@
 				DEVELOPMENT_TEAM = 8DVDW4Q338;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Image-Downloader-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "苯苯存图";
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "请您允许App保存照片到相册，否则下载功能将无法使用。";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -458,10 +471,11 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 0.1.3;
 				PRODUCT_BUNDLE_IDENTIFIER = "None.Image-Downloader";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_ENABLE_BATCH_MODE = NO;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
