@@ -14,6 +14,7 @@
 		448856FA2B3AB4BA007B55EC /* Image_DownloaderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 448856F92B3AB4BA007B55EC /* Image_DownloaderTests.swift */; };
 		448857042B3AB4BA007B55EC /* Image_DownloaderUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 448857032B3AB4BA007B55EC /* Image_DownloaderUITests.swift */; };
 		448857062B3AB4BA007B55EC /* Image_DownloaderUITestsLaunchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 448857052B3AB4BA007B55EC /* Image_DownloaderUITestsLaunchTests.swift */; };
+		44FC11502C1B81DC00883582 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44FC114F2C1B81DC00883582 /* SettingsView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -44,7 +45,8 @@
 		448856FF2B3AB4BA007B55EC /* Image DownloaderUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Image DownloaderUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		448857032B3AB4BA007B55EC /* Image_DownloaderUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Image_DownloaderUITests.swift; sourceTree = "<group>"; };
 		448857052B3AB4BA007B55EC /* Image_DownloaderUITestsLaunchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Image_DownloaderUITestsLaunchTests.swift; sourceTree = "<group>"; };
-		44D3E1DC2B3B45F900738644 /* Image-Downloader-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "Image-Downloader-Info.plist"; sourceTree = SOURCE_ROOT; };
+		44FC114D2C1B7C2200883582 /* Image-Downloader-Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = "Image-Downloader-Info.plist"; sourceTree = "<group>"; };
+		44FC114F2C1B81DC00883582 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -75,6 +77,7 @@
 		448856DC2B3AB4B9007B55EC = {
 			isa = PBXGroup;
 			children = (
+				44FC114D2C1B7C2200883582 /* Image-Downloader-Info.plist */,
 				448856E72B3AB4B9007B55EC /* Image Downloader */,
 				448856F82B3AB4BA007B55EC /* Image DownloaderTests */,
 				448857022B3AB4BA007B55EC /* Image DownloaderUITests */,
@@ -95,9 +98,9 @@
 		448856E72B3AB4B9007B55EC /* Image Downloader */ = {
 			isa = PBXGroup;
 			children = (
-				44D3E1DC2B3B45F900738644 /* Image-Downloader-Info.plist */,
 				448856E82B3AB4B9007B55EC /* Image_DownloaderApp.swift */,
 				448856EA2B3AB4B9007B55EC /* ContentView.swift */,
+				44FC114F2C1B81DC00883582 /* SettingsView.swift */,
 				448856EC2B3AB4BA007B55EC /* Assets.xcassets */,
 				448856EE2B3AB4BA007B55EC /* Preview Content */,
 			);
@@ -263,6 +266,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				44FC11502C1B81DC00883582 /* SettingsView.swift in Sources */,
 				448856EB2B3AB4B9007B55EC /* ContentView.swift in Sources */,
 				448856E92B3AB4B9007B55EC /* Image_DownloaderApp.swift in Sources */,
 			);
@@ -438,8 +442,8 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.1.3;
-				PRODUCT_BUNDLE_IDENTIFIER = "None.Image-Downloader";
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = top.ibenzene.ImageDownloader;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_ENABLE_BATCH_MODE = NO;
@@ -471,8 +475,8 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.1.3;
-				PRODUCT_BUNDLE_IDENTIFIER = "None.Image-Downloader";
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = top.ibenzene.ImageDownloader;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_ENABLE_BATCH_MODE = NO;
