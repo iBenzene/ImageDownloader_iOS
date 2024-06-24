@@ -20,6 +20,7 @@ struct ContentView: View {
     @State private var feedbackMessage: String?
     
     @State private var isError: Bool = false
+    @State private var isDownloading: Bool = false
     @State private var isShowingSettings = false
     @State private var selectedDownloader: ImageDownloaderType = .xhsImg
     

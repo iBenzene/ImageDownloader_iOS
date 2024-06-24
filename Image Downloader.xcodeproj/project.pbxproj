@@ -35,6 +35,8 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		442509402C29613F00C61E26 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
+		442509412C29D58200C61E26 /* LICENSE */ = {isa = PBXFileReference; lastKnownFileType = text; path = LICENSE; sourceTree = "<group>"; };
 		448856E52B3AB4B9007B55EC /* Image Downloader.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Image Downloader.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		448856E82B3AB4B9007B55EC /* Image_DownloaderApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Image_DownloaderApp.swift; sourceTree = "<group>"; };
 		448856EA2B3AB4B9007B55EC /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
@@ -77,6 +79,8 @@
 		448856DC2B3AB4B9007B55EC = {
 			isa = PBXGroup;
 			children = (
+				442509412C29D58200C61E26 /* LICENSE */,
+				442509402C29613F00C61E26 /* README.md */,
 				44FC114D2C1B7C2200883582 /* Image-Downloader-Info.plist */,
 				448856E72B3AB4B9007B55EC /* Image Downloader */,
 				448856F82B3AB4BA007B55EC /* Image DownloaderTests */,
@@ -220,6 +224,7 @@
 			knownRegions = (
 				en,
 				Base,
+				"zh-Hans",
 			);
 			mainGroup = 448856DC2B3AB4B9007B55EC;
 			packageReferences = (
