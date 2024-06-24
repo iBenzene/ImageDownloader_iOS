@@ -8,7 +8,9 @@
 
 ❤️ 或许「**苯苯存图**」可以帮助你～
 
-<img src="./Image Downloader/Assets.xcassets/Preview.imageset/Preview.png" alt="预览图" width="50%"></img>
+<div align=center>
+  <img src="./Image Downloader/Assets.xcassets/Preview.imageset/Preview.png" alt="预览图" width="50%"></img>
+</div>
 
 ## 快速开始
 
