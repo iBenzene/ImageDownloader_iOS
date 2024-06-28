@@ -2,7 +2,7 @@
 //  Image_DownloaderApp.swift
 //  Image Downloader
 //
-//  Created by 邱想想 on 2023/12/26.
+//  Created by 埃苯泽 on 2023/12/26.
 //
 
 import SwiftUI

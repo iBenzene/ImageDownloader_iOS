@@ -2,7 +2,7 @@
 //  SettingsView.swift
 //  Image Downloader
 //
-//  Created by 邱想想 on 2024/6/14.
+//  Created by 埃苯泽 on 2024/6/14.
 //
 
 import SwiftUI

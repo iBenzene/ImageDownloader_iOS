@@ -2,7 +2,7 @@
 //  ContentView.swift
 //  Image Downloader
 //
-//  Created by 邱想想 on 2023/12/26.
+//  Created by 埃苯泽 on 2023/12/26.
 //
 
 import SwiftUI
@@ -64,7 +64,7 @@ struct ContentView: View {
                                 Text(downloaderType.rawValue)
                             }
                         }
-                                                
+                        
                         Divider()
                         
                         Button {
@@ -154,7 +154,7 @@ struct ContentView: View {
                 if let message = feedbackMessage {
                     Text(message)
                         .font(.footnote)
-                        .foregroundColor(isError ? .red : .green)
+                        .foregroundColor(isError ? .red : (isDownloading ? .yellow : .green))
                         .padding()
                 }
             }
@@ -232,12 +232,12 @@ struct ContentView: View {
                     }
                     
                     // 根据提取的链接, 下载图片或视频, 并保存至相册
-                    for mediaUrl in mediaUrls {
+                    for (index, mediaUrl) in mediaUrls.enumerated() {
                         // 将 Unicode 编码 \u002F 替换为 /
                         let decodedMediaUrl = mediaUrl.replacingOccurrences(of: "\\u002F", with: "/")
                         
                         guard let tempUrl = URL(string: decodedMediaUrl) else {
-                            feedbackMessage = "提取的链接无效"
+                            feedbackMessage = "提取的链接无效（\(index + 1) / \(mediaUrls.count)）"
                             isError = true
                             
                             // Debug: 检查提取的链接
@@ -247,6 +247,9 @@ struct ContentView: View {
                         
                         do {
                             // 请求下载资源
+                            isDownloading = true
+                            feedbackMessage = "下载中..."
+                            isError = false
                             let (data, response) = try await URLSession.shared.data(from: tempUrl)
                             
                             // 检查有没有发生错误
@@ -257,13 +260,13 @@ struct ContentView: View {
                             switch selectedDownloader {
                             case .xhsVid: // 小红书视频下载器
                                 // 将视频保存至相册
-                                saveVideoToPhotoLibrary(videoData: data)
+                                saveVideoToPhotoLibrary(videoData: data, currentIndex: index + 1, totalCount: mediaUrls.count)
                             default: // 图片下载器
                                 // 将图片保存至相册
-                                saveImageToPhotoLibrary(imageData: data)
+                                saveImageToPhotoLibrary(imageData: data, currentIndex: index + 1, totalCount: mediaUrls.count)
                             }
                         } catch {
-                            feedbackMessage = "图片或视频下载失败: \(error.localizedDescription)"
+                            feedbackMessage = "图片或视频下载失败: \(error.localizedDescription)（\(index + 1) / \(mediaUrls.count)）"
                             isError = true
                         }
                     }
@@ -318,7 +321,7 @@ struct ContentView: View {
                     // 创建一个临时请求
                     var tempRequest = URLRequest(url: url)
                     
-                    // 设置请求头的信息
+                    // 设置请求头的信息x
                     tempRequest.allHTTPHeaderFields = headers
                     
                     // 创建一个自定义的 URLSessionDelegate 来处理重定向
@@ -574,16 +577,17 @@ struct ContentView: View {
     }
     
     // 将图片保存至相册
-    func saveImageToPhotoLibrary(imageData: Data) {
+    func saveImageToPhotoLibrary(imageData: Data, currentIndex: Int, totalCount: Int) {
         if let image = UIImage(data: imageData) {
             PHPhotoLibrary.shared().performChanges({
                 PHAssetChangeRequest.creationRequestForAsset(from: image)
             }) { success, error in
                 if success {
-                    feedbackMessage = "图片保存成功"
+                    isDownloading = false
+                    feedbackMessage = "图片保存成功（\(currentIndex) / \(totalCount)）"
                     isError = false
                 } else {
-                    feedbackMessage = "图片保存失败: \(error?.localizedDescription ?? "未知错误")"
+                    feedbackMessage = "图片保存失败: \(error?.localizedDescription ?? "未知错误")（\(currentIndex) / \(totalCount)"
                     isError = true
                 }
             }
@@ -591,7 +595,7 @@ struct ContentView: View {
     }
     
     // 将视频保存至相册
-    func saveVideoToPhotoLibrary(videoData: Data) {
+    func saveVideoToPhotoLibrary(videoData: Data, currentIndex: Int, totalCount: Int) {
         do {
             let tempUrl = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("tempVideo.mp4")
             try videoData.write(to: tempUrl)
@@ -600,10 +604,11 @@ struct ContentView: View {
                 PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: tempUrl)
             }) { success, error in
                 if success {
-                    feedbackMessage = "视频保存成功"
+                    isDownloading = false
+                    feedbackMessage = "视频保存成功（\(currentIndex) / \(totalCount)）"
                     isError = false
                 } else {
-                    feedbackMessage = "视频保存失败: \(error?.localizedDescription ?? "未知错误")"
+                    feedbackMessage = "视频保存失败: \(error?.localizedDescription ?? "未知错误")（\(currentIndex) / \(totalCount)）"
                     isError = true
                 }
                 
