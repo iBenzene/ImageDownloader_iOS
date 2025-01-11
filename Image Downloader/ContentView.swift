@@ -3,6 +3,7 @@
 //  Image Downloader
 //
 //  Created by 埃苯泽 on 2023/12/26.
+//  Copyright (c) 2023 iBenzene. All rights reserved.
 //
 
 import SwiftUI
@@ -10,6 +11,7 @@ import Photos
 
 enum ImageDownloaderType: String, CaseIterable {
     case xhsImg = "小红书图片下载器"
+    case xhsLiveImg = "小红书实况图片下载器（Beta 版）"
     case xhsVid = "小红书视频下载器"
     case mysImg = "米游社图片下载器"
     case wbImg = "微博图片下载器"
@@ -219,7 +221,12 @@ struct ContentView: View {
                 if let text = try await fetchUrl(url: url) {
                     
                     // 解析响应的文本并从中提取图片或视频的链接
-                    let mediaUrls = parsingResponse(text: text)
+                    let mediaUrls: [Any]
+                    if selectedDownloader == .xhsLiveImg {
+                        mediaUrls = try await parsingResponse(text: text, url: url)
+                    } else {
+                        mediaUrls = parsingResponse(text: text)
+                    }
                     
                     // 响应的文本中不包含目标图片或视频的链接
                     if mediaUrls.isEmpty {
@@ -233,41 +240,103 @@ struct ContentView: View {
                     
                     // 根据提取的链接, 下载图片或视频, 并保存至相册
                     for (index, mediaUrl) in mediaUrls.enumerated() {
-                        // 将 Unicode 编码 \u002F 替换为 /
-                        let decodedMediaUrl = mediaUrl.replacingOccurrences(of: "\\u002F", with: "/")
-                        
-                        guard let tempUrl = URL(string: decodedMediaUrl) else {
-                            feedbackMessage = "提取的链接无效（\(index + 1) / \(mediaUrls.count)）"
-                            isError = true
-                            
-                            // Debug: 检查提取的链接
-                            print("⚠️ 提取的链接: \(mediaUrl)")
-                            return
-                        }
-                        
-                        do {
-                            // 请求下载资源
-                            isDownloading = true
-                            feedbackMessage = "下载中..."
-                            isError = false
-                            let (data, response) = try await URLSession.shared.data(from: tempUrl)
-                            
-                            // 检查有没有发生错误
-                            guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
-                                throw URLError(.badServerResponse)
+                        if selectedDownloader == .xhsLiveImg {
+                            guard let mediaUrlTuple = mediaUrl as? (String, String) else {
+                                feedbackMessage = "提取的实况图片链接不是元组类型（\(index + 1) / \(mediaUrls.count)）"
+                                isError = true
+                                return
                             }
                             
-                            switch selectedDownloader {
-                            case .xhsVid: // 小红书视频下载器
-                                // 将视频保存至相册
-                                saveVideoToPhotoLibrary(videoData: data, currentIndex: index + 1, totalCount: mediaUrls.count)
-                            default: // 图片下载器
-                                // 将图片保存至相册
-                                saveImageToPhotoLibrary(imageData: data, currentIndex: index + 1, totalCount: mediaUrls.count)
+                            // 提取实况封面的 url
+                            guard let coverUrl = URL(string: mediaUrlTuple.0) else {
+                                feedbackMessage = "提取的实况封面链接不是合法的 URL（\(index + 1) / \(mediaUrls.count)）"
+                                isError = true
+                                return
                             }
-                        } catch {
-                            feedbackMessage = "图片或视频下载失败: \(error.localizedDescription)（\(index + 1) / \(mediaUrls.count)）"
-                            isError = true
+                            
+                            // 提取实况视频的 url
+                            let videoUrl: URL?
+                            if mediaUrlTuple.1.isEmpty {
+                                videoUrl = nil
+                            } else {
+                                guard let validVideoUrl = URL(string: mediaUrlTuple.1) else {
+                                    feedbackMessage = "提取的实况视频链接不是合法的 URL（\(index + 1) / \(mediaUrls.count)）"
+                                    isError = true
+                                    return
+                                }
+                                videoUrl = validVideoUrl
+                            }
+                            
+                            do {
+                                // 请求下载资源
+                                isDownloading = true
+                                feedbackMessage = "下载中..."
+                                isError = false
+                                
+                                // 下载实况封面
+                                let (coverData, coverResponse) = try await URLSession.shared.data(from: coverUrl)
+                                guard let coverHttpResponse = coverResponse as? HTTPURLResponse, coverHttpResponse.statusCode == 200 else {
+                                    throw URLError(.badServerResponse)
+                                }
+                                
+                                // 下载实况视频
+                                var videoData: Data? = nil
+                                if let videoUrl = videoUrl {
+                                    let (data, videoResponse) = try await URLSession.shared.data(from: videoUrl)
+                                    guard let videoHttpResponse = videoResponse as? HTTPURLResponse, videoHttpResponse.statusCode == 200 else {
+                                        throw URLError(.badServerResponse)
+                                    }
+                                    videoData = data
+                                }
+                                
+                                // 将实况图片保存至相册
+                                saveLiveImageToPhotoLibrary(coverData: coverData, videoData: videoData, currentIndex: index + 1, totalCount: mediaUrls.count)
+                            } catch {
+                                feedbackMessage = "实况图片下载失败: \(error.localizedDescription)（\(index + 1) / \(mediaUrls.count)）"
+                                isError = true
+                            }
+                        } else {
+                            // 将 Unicode 编码 \u002F 替换为 /
+                            guard let mediaUrlString = mediaUrl as? String else {
+                                feedbackMessage = "提取的资源链接不是字符串类型（\(index + 1) / \(mediaUrls.count)）"
+                                isError = true
+                                return
+                            }
+                            let decodedMediaUrlString = mediaUrlString.replacingOccurrences(of: "\\u002F", with: "/")
+                            
+                            guard let decodedMediaUrl = URL(string: decodedMediaUrlString) else {
+                                feedbackMessage = "提取的资源链接不是合法的 URL（\(index + 1) / \(mediaUrls.count)）"
+                                isError = true
+                                
+                                // Debug: 检查提取的链接
+                                print("⚠️ 提取的链接: \(mediaUrl)")
+                                return
+                            }
+                            
+                            do {
+                                // 请求下载资源
+                                isDownloading = true
+                                feedbackMessage = "下载中..."
+                                isError = false
+                                let (data, response) = try await URLSession.shared.data(from: decodedMediaUrl)
+                                
+                                // 检查有没有发生错误
+                                guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+                                    throw URLError(.badServerResponse)
+                                }
+                                
+                                switch selectedDownloader {
+                                case .xhsVid: // 小红书视频下载器
+                                    // 将视频保存至相册
+                                    saveVideoToPhotoLibrary(videoData: data, currentIndex: index + 1, totalCount: mediaUrls.count)
+                                default: // 图片下载器
+                                    // 将图片保存至相册
+                                    saveImageToPhotoLibrary(imageData: data, currentIndex: index + 1, totalCount: mediaUrls.count)
+                                }
+                            } catch {
+                                feedbackMessage = "图片或视频下载失败: \(error.localizedDescription)（\(index + 1) / \(mediaUrls.count)）"
+                                isError = true
+                            }
                         }
                     }
                 }
@@ -281,17 +350,17 @@ struct ContentView: View {
     // 发起网络请求, 获取包含目标资源 url 的文本或对象
     func fetchUrl(url: URL) async throws -> String? {
         // 声明要访问的 url
-        var tgtUrl: URL
+        let tgtUrl: URL
         
         // 声明伪造的请求头
-        var headers = [String: String]()
+        let headers: [String: String]
         
         switch selectedDownloader {
         case .xhsVid: // 小红书视频下载器
             // [2024-06-18] 小红书更新了, 只有在提供 Cookie 时, 才会暴露 originVideoKey 参数
             
             // 提取 Cookie
-            var cookie: String
+            let cookie: String
             
             if (!xhsCookie.isEmpty) {
                 // 配置了 Cookie
@@ -305,7 +374,7 @@ struct ContentView: View {
             
             // 伪造浏览器的 http 请求, 通过 307 重定向来获取真实地址
             headers = [
-                "Accept": "application/json, text/plain, */*",
+                "Accept": "*/*",
                 
                 //（必不可少）用户代理
                 "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -367,7 +436,7 @@ struct ContentView: View {
             }
             
         case .mysImg: // 米游社图片下载器
-            var apiUrl: URL
+            let apiUrl: URL
             
             // 提取文章 id
             if let id = url.absoluteString.components(separatedBy: "/").last { // 为什么不直接使用 pathComponents.last 呢？因为会被 url 中的「?」干扰
@@ -380,7 +449,7 @@ struct ContentView: View {
             
             // 伪造 ajax 请求
             headers = [
-                "Accept": "application/json, text/plain, */*",
+                "Accept": "*/*",
                 
                 //（必不可少）防盗链
                 "Referer": "https://www.miyoushe.com/",
@@ -393,7 +462,7 @@ struct ContentView: View {
             tgtUrl = apiUrl
             
         case .wbImg: // 微博图片下载器
-            var apiUrl: URL
+            let apiUrl: URL
             
             // 提取微博 id
             if let id = url.pathComponents.last?.split(separator: "?").first {
@@ -405,7 +474,7 @@ struct ContentView: View {
             }
             
             // 提取 Cookie
-            var cookie: String
+            let cookie: String
             
             if (!weiboCookiesPoolUrl.isEmpty) {
                 // 配置了 Cookies 池的 URL
@@ -462,7 +531,7 @@ struct ContentView: View {
             
             // 伪造 ajax 请求
             headers = [
-                "Accept": "application/json, text/plain, */*",
+                "Accept": "*/*",
                 
                 // 用户代理
                 "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -483,7 +552,7 @@ struct ContentView: View {
             
             // 伪造浏览器的 http 请求, 以获取网页的 html 文本
             headers = [
-                "Accept": "application/json, text/plain, */*",
+                "Accept": "*/*",
                 
                 //（必不可少）用户代理
                 "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
@@ -514,13 +583,109 @@ struct ContentView: View {
         return result
     }
     
+    // 生成指定长度的随机字母数字字符串
+    func randomString(length: Int) -> String {
+        let characters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+        return String((0..<length).compactMap { _ in characters.randomElement() })
+    }
+    
+    // 生成指定长度的随机十六进制字符串
+    func randomHexString(length: Int) -> String {
+        let characters = "abcdef0123456789"
+        return String((0..<length).compactMap { _ in characters.randomElement() })
+    }
+    
+    // 解析 html 文本, 提取实况封面的 url, 同时使用「红薯库」提供的 api, 获取实况视频的 url
+    func parsingResponse(text: String, url: URL) async throws -> [(String, String)] {
+        let pattern = #"<meta\s+name="og:image"\s+content="([^"]+)""#
+        let coverUrls = extractUrls(from: text, withPattern: pattern)
+        
+        // 随机生成 openId
+        let openId = "oqVFV4" + randomString(length: 22)
+        
+        // 随机生成 sign, 作用未知
+        let sign = randomHexString(length: 32)
+        
+        // 构建要访问的 url
+        let tgtUrlString = "https://honghui.hongshuku.com/app/index.php?i=22&t=0&v=1.0&from=wxapp&c=entry&a=wxapp&do=dongtu&sign=\(sign)&m=qu_y&url=\(url)&openid=\(openId)"
+        guard let tgtUrl = URL(string: tgtUrlString) else {
+            // 如果 url 构建失败, 则返回封面 url, 视频 url 为空
+            return coverUrls.map { ($0, "") }
+        }
+        
+        // 伪造微信小程序的请求, 怕后端会记录日志
+        let headers = [
+            "Accept": "*/*",
+            "Accept-Encoding": "gzip, compress, br, deflate",
+            "Host": "honghui.hongshuku.com",
+            "Connection": "keep-alive",
+            
+            // 微信小程序会自动添加的参数, 作为一种特征
+            "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_7_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 MicroMessenger/8.0.54(0x1800363a) NetType/4G Language/zh_CN",
+            "Referer": "https://servicewechat.com/wxd856b1e1305490f7/42/page-frame.html"
+        ]
+        
+        // 创建一个网络请求
+        var request = URLRequest(url: tgtUrl)
+        print("🔗 向 \(tgtUrl) 发起网络请求。")
+        
+        // 设置请求头的信息
+        request.allHTTPHeaderFields = headers
+        
+        // 发起网络请求
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        // 检查有没有发生错误
+        guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+            throw URLError(.badServerResponse)
+        }
+        
+        // 定义数据模型
+        struct Response: Codable {
+            let errno: Int
+            let message: String
+            let data: [LiveImageData]
+        }
+        
+        struct LiveImageData: Codable {
+            let type: String
+            let poster: String
+            let url: String
+        }
+        
+        do {
+            let decoder = JSONDecoder()
+            let response = try decoder.decode(Response.self, from: data)
+            
+            // 检查 errno 是否为 0
+            guard response.errno == 0 else {
+                return coverUrls.map { ($0, "") }
+            }
+            
+            // 解析「红薯库」提供的 json
+            let liveImageData = response.data
+            var result: [(String, String)] = coverUrls.map { ($0, "") } // 这里先把所有 coverUrl 对应的 video 设为空
+            var cnt = 0 // 统计实况照片的数目
+            for (index, coverUrl) in coverUrls.enumerated() {
+                let coverId = extractID(from: coverUrl)
+                
+                if let video = liveImageData.first(where: { extractID(from: $0.poster) == coverId }) {
+                    print("🔍 发现实况图片: \(coverId)")
+                    result[index].1 = video.url
+                    cnt += 1
+                }
+            }
+            print("📊 实况图片占比: \(cnt) / \(result.count)")
+            return result
+        } catch {
+            print("⚠️ 解析「红薯库」提供的 JSON 时发生了一个错误: \(error)")
+            return coverUrls.map { ($0, "") }
+        }
+    }
+    
     // 解析 html 或 json 文本, 提取资源的 url
     func parsingResponse(text: String) -> [String] {
         switch selectedDownloader {
-        case .xhsImg: // 小红书图片下载器
-            let pattern = #"<meta\s+name="og:image"\s+content="([^"]+)""#
-            return extractUrls(from: text, withPattern: pattern)
-            
         case .xhsVid: // 小红书视频下载器
             let pattern = #""originVideoKey":"([^"]+)""#
             let prefix = "https://sns-video-al.xhscdn.com/"
@@ -534,8 +699,14 @@ struct ContentView: View {
             let pattern = #""pic_ids"\s*:\s*\[([^\]]+)\]"#
             let prefix = "https://wx1.sinaimg.cn/large/"
             return extractUrls(from: text, withPattern: pattern, prefix: prefix, isJson: true)
+            
+        default: // 小红书图片下载器
+            let pattern = #"<meta\s+name="og:image"\s+content="([^"]+)""#
+            return extractUrls(from: text, withPattern: pattern)
         }
     }
+    
+    
     
     // 提取资源的 url
     func extractUrls(from text: String, withPattern pattern: String, prefix: String = "", isJson: Bool = false) -> [String] {
@@ -576,6 +747,16 @@ struct ContentView: View {
         }
     }
     
+    // 提取资源（主要是动态图片）的 id
+    private func extractID(from urlString: String) -> String {
+        guard let lastComponent = urlString.split(separator: "/").last else {
+            return ""
+        }
+        // 有些 url 可能没有 !, 所以这里使用 first ?? ""
+        let idPart = lastComponent.split(separator: "!").first ?? ""
+        return String(idPart)
+    }
+    
     // 将图片保存至相册
     func saveImageToPhotoLibrary(imageData: Data, currentIndex: Int, totalCount: Int) {
         if let image = UIImage(data: imageData) {
@@ -596,33 +777,85 @@ struct ContentView: View {
     
     // 将视频保存至相册
     func saveVideoToPhotoLibrary(videoData: Data, currentIndex: Int, totalCount: Int) {
+        // 将视频数据写入临时文件
+        let tempVideoUrl = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("tempVideo.mp4")
         do {
-            let tempUrl = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("tempVideo.mp4")
-            try videoData.write(to: tempUrl)
-            
-            PHPhotoLibrary.shared().performChanges({
-                PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: tempUrl)
-            }) { success, error in
-                if success {
-                    isDownloading = false
-                    feedbackMessage = "视频保存成功（\(currentIndex) / \(totalCount)）"
-                    isError = false
-                } else {
-                    feedbackMessage = "视频保存失败: \(error?.localizedDescription ?? "未知错误")（\(currentIndex) / \(totalCount)）"
-                    isError = true
-                }
-                
-                // 删除临时视频文件
-                do {
-                    try FileManager.default.removeItem(at: tempUrl)
-                } catch {
-                    // Debug
-                    print("⚠️ Failed to delete temporary video file: \(error)")
-                }
-            }
+            try videoData.write(to: tempVideoUrl)
         } catch {
-            feedbackMessage = "无法保存视频: \(error.localizedDescription)"
+            feedbackMessage = "写入临时视频文件失败: \(error.localizedDescription)"
             isError = true
+            return
+        }
+        
+        PHPhotoLibrary.shared().performChanges({
+            PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: tempVideoUrl)
+        }) { success, error in
+            if success {
+                isDownloading = false
+                feedbackMessage = "视频保存成功（\(currentIndex) / \(totalCount)）"
+                isError = false
+            } else {
+                feedbackMessage = "视频保存失败: \(error?.localizedDescription ?? "未知错误")（\(currentIndex) / \(totalCount)）"
+                isError = true
+            }
+            
+            // 删除临时视频文件
+            do {
+                try FileManager.default.removeItem(at: tempVideoUrl)
+                print("♻️ 已删除临时视频文件: \(tempVideoUrl)")
+            } catch {
+                // Debug
+                print("⚠️ 删除临时视频文件失败: \(error)")
+            }
+        }
+    }
+    
+    // 将实况图片保存至相册
+    func saveLiveImageToPhotoLibrary(coverData: Data, videoData: Data?, currentIndex: Int, totalCount: Int) {
+        guard let videoData = videoData else {
+            // 如果没有视频数据, 则当作普通图片保存
+            saveImageToPhotoLibrary(imageData: coverData, currentIndex: currentIndex, totalCount: totalCount)
+            return
+        }
+        
+        let tempCoverUrl = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("tempCover.jpg")
+        do {
+            try coverData.write(to: tempCoverUrl)
+        } catch {
+            feedbackMessage = "写入临时封面文件失败: \(error.localizedDescription)"
+            isError = true
+            return
+        }
+        
+        let tempVideoUrl = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("tempVideo.mp4")
+        do {
+            try videoData.write(to: tempVideoUrl)
+        } catch {
+            feedbackMessage = "写入临时视频文件失败: \(error.localizedDescription)"
+            isError = true
+            return
+        }
+        
+        let livePhotoHelper = LivePhotoHelper()
+        livePhotoHelper.saveLivePhoto(tempCoverUrl, videoUrl: tempVideoUrl) { success, error in
+            if success {
+                isDownloading = false
+                feedbackMessage = "实况图片保存成功（\(currentIndex) / \(totalCount)）"
+                isError = false
+            } else {
+                feedbackMessage = "实况图片保存失败: \(error?.localizedDescription ?? "未知错误")（\(currentIndex) / \(totalCount)）"
+                isError = true
+            }
+            
+            // 删除临时文件
+            do {
+                try FileManager.default.removeItem(at: tempCoverUrl)
+                try FileManager.default.removeItem(at: tempVideoUrl)
+                print("♻️ 已删除临时文件: \(tempCoverUrl), \(tempVideoUrl)")
+            } catch {
+                // Debug
+                print("⚠️ 删除临时文件失败: \(error)")
+            }
         }
     }
     

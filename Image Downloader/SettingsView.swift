@@ -3,6 +3,7 @@
 //  Image Downloader
 //
 //  Created by 埃苯泽 on 2024/6/14.
+//  Copyright (c) 2024 iBenzene. All rights reserved.
 //
 
 import SwiftUI

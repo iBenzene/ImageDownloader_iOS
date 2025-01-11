@@ -14,6 +14,7 @@
 		448856FA2B3AB4BA007B55EC /* Image_DownloaderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 448856F92B3AB4BA007B55EC /* Image_DownloaderTests.swift */; };
 		448857042B3AB4BA007B55EC /* Image_DownloaderUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 448857032B3AB4BA007B55EC /* Image_DownloaderUITests.swift */; };
 		448857062B3AB4BA007B55EC /* Image_DownloaderUITestsLaunchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 448857052B3AB4BA007B55EC /* Image_DownloaderUITestsLaunchTests.swift */; };
+		44FA6A8B2D32B1BB00D55A8E /* LivePhotoHelper.m in Sources */ = {isa = PBXBuildFile; fileRef = 44FA6A8A2D32B1BB00D55A8E /* LivePhotoHelper.m */; };
 		44FC11502C1B81DC00883582 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44FC114F2C1B81DC00883582 /* SettingsView.swift */; };
 /* End PBXBuildFile section */
 
@@ -47,6 +48,8 @@
 		448856FF2B3AB4BA007B55EC /* Image DownloaderUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Image DownloaderUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		448857032B3AB4BA007B55EC /* Image_DownloaderUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Image_DownloaderUITests.swift; sourceTree = "<group>"; };
 		448857052B3AB4BA007B55EC /* Image_DownloaderUITestsLaunchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Image_DownloaderUITestsLaunchTests.swift; sourceTree = "<group>"; };
+		44FA6A892D32B1BB00D55A8E /* LivePhotoHelper.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = LivePhotoHelper.h; sourceTree = "<group>"; };
+		44FA6A8A2D32B1BB00D55A8E /* LivePhotoHelper.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = LivePhotoHelper.m; sourceTree = "<group>"; };
 		44FC114D2C1B7C2200883582 /* Image-Downloader-Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = "Image-Downloader-Info.plist"; sourceTree = "<group>"; };
 		44FC114F2C1B81DC00883582 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -102,6 +105,8 @@
 		448856E72B3AB4B9007B55EC /* Image Downloader */ = {
 			isa = PBXGroup;
 			children = (
+				44FA6A892D32B1BB00D55A8E /* LivePhotoHelper.h */,
+				44FA6A8A2D32B1BB00D55A8E /* LivePhotoHelper.m */,
 				448856E82B3AB4B9007B55EC /* Image_DownloaderApp.swift */,
 				448856EA2B3AB4B9007B55EC /* ContentView.swift */,
 				44FC114F2C1B81DC00883582 /* SettingsView.swift */,
@@ -206,6 +211,7 @@
 				TargetAttributes = {
 					448856E42B3AB4B9007B55EC = {
 						CreatedOnToolsVersion = 13.4.1;
+						LastSwiftMigration = 1420;
 					};
 					448856F42B3AB4BA007B55EC = {
 						CreatedOnToolsVersion = 13.4.1;
@@ -273,6 +279,7 @@
 			files = (
 				44FC11502C1B81DC00883582 /* SettingsView.swift in Sources */,
 				448856EB2B3AB4B9007B55EC /* ContentView.swift in Sources */,
+				44FA6A8B2D32B1BB00D55A8E /* LivePhotoHelper.m in Sources */,
 				448856E92B3AB4B9007B55EC /* Image_DownloaderApp.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -360,7 +367,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 15.5;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.6;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -414,7 +421,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 15.5;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.6;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				SDKROOT = iphoneos;
@@ -429,29 +436,33 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"Image Downloader/Preview Content\"";
 				DEVELOPMENT_TEAM = 8DVDW4Q338;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Image-Downloader-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "苯苯存图";
-				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "请您允许App保存照片到相册，否则下载功能将无法使用。";
-				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "请您允许 App 保存图片或视频到相册，否则下载功能将无法使用。";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = top.ibenzene.ImageDownloader;
+				MARKETING_VERSION = 0.1.1;
+				PRODUCT_BUNDLE_IDENTIFIER = cn.ibenzene.ImageDownloader;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_ENABLE_BATCH_MODE = NO;
+				SWIFT_OBJC_BRIDGING_HEADER = "Image Downloader/LivePhotoHelper.h";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -462,29 +473,32 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"Image Downloader/Preview Content\"";
 				DEVELOPMENT_TEAM = 8DVDW4Q338;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Image-Downloader-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "苯苯存图";
-				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "请您允许App保存照片到相册，否则下载功能将无法使用。";
-				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "请您允许 App 保存图片或视频到相册，否则下载功能将无法使用。";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = top.ibenzene.ImageDownloader;
+				MARKETING_VERSION = 0.1.1;
+				PRODUCT_BUNDLE_IDENTIFIER = cn.ibenzene.ImageDownloader;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_ENABLE_BATCH_MODE = NO;
+				SWIFT_OBJC_BRIDGING_HEADER = "Image Downloader/LivePhotoHelper.h";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
