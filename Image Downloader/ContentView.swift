@@ -356,84 +356,84 @@ struct ContentView: View {
         let headers: [String: String]
         
         switch selectedDownloader {
-        case .xhsVid: // 小红书视频下载器
             // [2024-06-18] 小红书更新了, 只有在提供 Cookie 时, 才会暴露 originVideoKey 参数
+            // [2025-01-12] 小红书更新了, 现在会直接暴露无水印视频的 URL, 不用再自己构造了
+            // case .xhsVid: // 小红书视频下载器
+            //     // 提取 Cookie
+            //     let cookie: String
             
-            // 提取 Cookie
-            let cookie: String
+            //     if (!xhsCookie.isEmpty) {
+            //         // 配置了 Cookie
+            //         cookie = xhsCookie
+            //     } else {
+            //         // 没有配置 Cookies
+            //         feedbackMessage = "请配置 Cookies"
+            //         isError = true
+            //         return nil
+            //     }
             
-            if (!xhsCookie.isEmpty) {
-                // 配置了 Cookie
-                cookie = xhsCookie
-            } else {
-                // 没有配置 Cookies
-                feedbackMessage = "请配置 Cookies"
-                isError = true
-                return nil
-            }
+            //     // 伪造浏览器的 http 请求, 通过 307 重定向来获取真实地址
+            //     headers = [
+            //         "Accept": "*/*",
             
-            // 伪造浏览器的 http 请求, 通过 307 重定向来获取真实地址
-            headers = [
-                "Accept": "*/*",
-                
-                //（必不可少）用户代理
-                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                
-                //（必不可少）Cookie
-                "Cookie": cookie
-            ]
+            //         //（必不可少）用户代理
+            //         "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             
-            // 获取 url 的 host 属性
-            if let host = url.host {
-                // 如果域名是 xhslink.com 则需要重定向
-                if host == "xhslink.com" {
-                    // 创建一个临时请求
-                    var tempRequest = URLRequest(url: url)
-                    
-                    // 设置请求头的信息x
-                    tempRequest.allHTTPHeaderFields = headers
-                    
-                    // 创建一个自定义的 URLSessionDelegate 来处理重定向
-                    class RedirectHandler: NSObject, URLSessionDelegate, URLSessionTaskDelegate {
-                        
-                        // 禁止自动重定向
-                        func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest, completionHandler: @escaping (URLRequest?) -> Void) {
-                            // 不进行自动重定向, 传递 nil 继续使用当前响应
-                            completionHandler(nil)
-                        }
-                    }
-                    
-                    // 创建 URLSessionConfiguration
-                    let config = URLSessionConfiguration.default
-                    
-                    // 创建一个自定义的 URLSession, 指定代理
-                    let session = URLSession(configuration: config, delegate: RedirectHandler(), delegateQueue: nil)
-                    
-                    // 发起临时请求
-                    let (_, response) = try await session.data(for: tempRequest)
-                    guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 307 else {
-                        feedbackMessage = "重定向异常"
-                        isError = true
-                        return nil
-                    }
-                    
-                    // 获取 Location 属性
-                    guard let location = httpResponse.allHeaderFields["Location"] as? String else {
-                        feedbackMessage = "重定向失败: Location 属性不存在"
-                        isError = true
-                        return nil
-                    }
-                    
-                    // 更新要访问的 url
-                    tgtUrl = URL(string: location)!
-                } else {
-                    tgtUrl = url
-                }
-            } else {
-                feedbackMessage = "网络请求异常: host 属性不存在"
-                isError = true
-                return nil
-            }
+            //         //（必不可少）Cookie
+            //         "Cookie": cookie
+            //     ]
+            
+            //     // 获取 url 的 host 属性
+            //     if let host = url.host {
+            //         // 如果域名是 xhslink.com 则需要重定向
+            //         if host == "xhslink.com" {
+            //             // 创建一个临时请求
+            //             var tempRequest = URLRequest(url: url)
+            
+            //             // 设置请求头的信息x
+            //             tempRequest.allHTTPHeaderFields = headers
+            
+            //             // 创建一个自定义的 URLSessionDelegate 来处理重定向
+            //             class RedirectHandler: NSObject, URLSessionDelegate, URLSessionTaskDelegate {
+            
+            //                 // 禁止自动重定向
+            //                 func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest, completionHandler: @escaping (URLRequest?) -> Void) {
+            //                     // 不进行自动重定向, 传递 nil 继续使用当前响应
+            //                     completionHandler(nil)
+            //                 }
+            //             }
+            
+            //             // 创建 URLSessionConfiguration
+            //             let config = URLSessionConfiguration.default
+            
+            //             // 创建一个自定义的 URLSession, 指定代理
+            //             let session = URLSession(configuration: config, delegate: RedirectHandler(), delegateQueue: nil)
+            
+            //             // 发起临时请求
+            //             let (_, response) = try await session.data(for: tempRequest)
+            //             guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 307 else {
+            //                 feedbackMessage = "重定向异常"
+            //                 isError = true
+            //                 return nil
+            //             }
+            
+            //             // 获取 Location 属性
+            //             guard let location = httpResponse.allHeaderFields["Location"] as? String else {
+            //                 feedbackMessage = "重定向失败: Location 属性不存在"
+            //                 isError = true
+            //                 return nil
+            //             }
+            
+            //             // 更新要访问的 url
+            //             tgtUrl = URL(string: location)!
+            //         } else {
+            //             tgtUrl = url
+            //         }
+            //     } else {
+            //         feedbackMessage = "网络请求异常: host 属性不存在"
+            //         isError = true
+            //         return nil
+            //     }
             
         case .mysImg: // 米游社图片下载器
             let apiUrl: URL
@@ -543,7 +543,7 @@ struct ContentView: View {
             // 更新要访问的 url
             tgtUrl = apiUrl
             
-        default: // 小红书图片下载器
+        default: // 小红书图片下载器、(2025-01-12 新增) 小红书动态图片下载器、小红书视频下载器
             // ToDo: 对于像 http://xhslink.com/TMTJmy 这种动态网页, html 文本中不包含目标图片的链接, 仍存在改进空间
             
             // [2024-03-29] 小红书开始检查请求的 User-Agent 字段了, 应该伪造浏览器的 HTTP 请求, 而不是使用 App 自带的 HTTP 请求
@@ -687,9 +687,11 @@ struct ContentView: View {
     func parsingResponse(text: String) -> [String] {
         switch selectedDownloader {
         case .xhsVid: // 小红书视频下载器
-            let pattern = #""originVideoKey":"([^"]+)""#
-            let prefix = "https://sns-video-al.xhscdn.com/"
-            return extractUrls(from: text, withPattern: pattern, prefix: prefix)
+            // let pattern = #""originVideoKey":"([^"]+)""#
+            // let prefix = "https://sns-video-al.xhscdn.com/"
+            // return extractUrls(from: text, withPattern: pattern, prefix: prefix)
+            let pattern = #"<meta\s+name="og:video"\s+content="([^"]+)""#
+            return extractUrls(from: text, withPattern: pattern)
             
         case .mysImg: // 米游社图片下载器
             let pattern = #""images"\s*:\s*\[([^\]]+)\]"#

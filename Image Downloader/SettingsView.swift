@@ -15,9 +15,9 @@ struct SettingsView: View {
     
     var body: some View {
         List {
-            Section(header: Text("小红书 Cookie").textCase(nil), footer: Text("小红书 Cookie 仅用于下载视频。")) {
-                TextField("请输入 Cookie", text: $xhsCookie)
-            }
+            // Section(header: Text("小红书 Cookie").textCase(nil), footer: Text("小红书 Cookie 仅用于下载视频。")) {
+            //     TextField("请输入 Cookie", text: $xhsCookie)
+            // }
             
             Section(header: Text("微博 Cookie").textCase(nil)) {
                 TextField("请输入 Cookie", text: $weiboCookie)
