@@ -30,6 +30,10 @@ struct ContentView: View {
     @AppStorage("weiboCookie") private var weiboCookie: String = ""
     @AppStorage("weiboCookiesPoolUrl") private var weiboCookiesPoolUrl: String = ""
     
+    @AppStorage("saveOriginalVideo") private var saveOriginalVideo: Bool = false
+    
+    private let userAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    
     var body: some View {
         NavigationView {
             VStack {
@@ -356,84 +360,10 @@ struct ContentView: View {
         let headers: [String: String]
         
         switch selectedDownloader {
-            // [2024-06-18] 小红书更新了, 只有在提供 Cookie 时, 才会暴露 originVideoKey 参数
-            // [2025-01-12] 小红书更新了, 现在会直接暴露无水印视频的 URL, 不用再自己构造了
-            // case .xhsVid: // 小红书视频下载器
-            //     // 提取 Cookie
-            //     let cookie: String
-            
-            //     if (!xhsCookie.isEmpty) {
-            //         // 配置了 Cookie
-            //         cookie = xhsCookie
-            //     } else {
-            //         // 没有配置 Cookies
-            //         feedbackMessage = "请配置 Cookies"
-            //         isError = true
-            //         return nil
-            //     }
-            
-            //     // 伪造浏览器的 http 请求, 通过 307 重定向来获取真实地址
-            //     headers = [
-            //         "Accept": "*/*",
-            
-            //         //（必不可少）用户代理
-            //         "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            
-            //         //（必不可少）Cookie
-            //         "Cookie": cookie
-            //     ]
-            
-            //     // 获取 url 的 host 属性
-            //     if let host = url.host {
-            //         // 如果域名是 xhslink.com 则需要重定向
-            //         if host == "xhslink.com" {
-            //             // 创建一个临时请求
-            //             var tempRequest = URLRequest(url: url)
-            
-            //             // 设置请求头的信息x
-            //             tempRequest.allHTTPHeaderFields = headers
-            
-            //             // 创建一个自定义的 URLSessionDelegate 来处理重定向
-            //             class RedirectHandler: NSObject, URLSessionDelegate, URLSessionTaskDelegate {
-            
-            //                 // 禁止自动重定向
-            //                 func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest, completionHandler: @escaping (URLRequest?) -> Void) {
-            //                     // 不进行自动重定向, 传递 nil 继续使用当前响应
-            //                     completionHandler(nil)
-            //                 }
-            //             }
-            
-            //             // 创建 URLSessionConfiguration
-            //             let config = URLSessionConfiguration.default
-            
-            //             // 创建一个自定义的 URLSession, 指定代理
-            //             let session = URLSession(configuration: config, delegate: RedirectHandler(), delegateQueue: nil)
-            
-            //             // 发起临时请求
-            //             let (_, response) = try await session.data(for: tempRequest)
-            //             guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 307 else {
-            //                 feedbackMessage = "重定向异常"
-            //                 isError = true
-            //                 return nil
-            //             }
-            
-            //             // 获取 Location 属性
-            //             guard let location = httpResponse.allHeaderFields["Location"] as? String else {
-            //                 feedbackMessage = "重定向失败: Location 属性不存在"
-            //                 isError = true
-            //                 return nil
-            //             }
-            
-            //             // 更新要访问的 url
-            //             tgtUrl = URL(string: location)!
-            //         } else {
-            //             tgtUrl = url
-            //         }
-            //     } else {
-            //         feedbackMessage = "网络请求异常: host 属性不存在"
-            //         isError = true
-            //         return nil
-            //     }
+        // [2024-06-18] 小红书更新了, 只有在提供 Cookie 时, 才会暴露 originVideoKey 参数
+        // [2025-01-12] 小红书更新了, 现在会直接暴露无水印视频的 URL, 不用再自己构造了
+        // case .xhsVid: // 小红书视频下载器
+        // ...
             
         case .mysImg: // 米游社图片下载器
             let apiUrl: URL
@@ -455,7 +385,7 @@ struct ContentView: View {
                 "Referer": "https://www.miyoushe.com/",
                 
                 //（必不可少）用户代理
-                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                "User-Agent": userAgent
             ]
             
             // 更新要访问的 url
@@ -474,8 +404,9 @@ struct ContentView: View {
             }
             
             // 提取 Cookie
-            let cookie: String
+            var cookie: String? = nil
             
+            // [2025-02-01] 与微博 Cookie 配置相关的代码暂时无用, 因为现在可以使用游客 Cookie 来访问微博的 API
             if (!weiboCookiesPoolUrl.isEmpty) {
                 // 配置了 Cookies 池的 URL
                 guard let tempUrl = URL(string: weiboCookiesPoolUrl) else {
@@ -524,9 +455,56 @@ struct ContentView: View {
                 cookie = weiboCookie
             } else {
                 // 没有配置 Cookies
-                feedbackMessage = "请配置 Cookies"
-                isError = true
-                return nil
+                // feedbackMessage = "请配置 Cookies"
+                // isError = true
+                // return nil
+                let tempUrl = URL(string: "https://passport.weibo.com/visitor/genvisitor2")!
+                
+                let tempHeaders = [
+                    "Accept": "*/*",
+                    
+                    // 用户代理
+                    "User-Agent": userAgent,
+                    
+                    //（必不可少）内容类型
+                    "Content-Type": "application/x-www-form-urlencoded"
+                ]
+                
+                // 请求体数据
+                let bodyParameters = "cb=visitor_gray_callback&tid=&from=weibo"
+                
+                // 创建一个临时的网络请求
+                var tempRequest = URLRequest(url: tempUrl)
+                tempRequest.httpMethod = "POST"
+                tempRequest.allHTTPHeaderFields = tempHeaders
+                tempRequest.httpBody = bodyParameters.data(using: .utf8)
+                
+                // 请求生成一个游客 Cookie
+                let (_, response) = try await URLSession.shared.data(for: tempRequest)
+                
+                // 检查有没有发生错误
+                guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+                    feedbackMessage = "游客 Cookie 生成失败"
+                    isError = true
+                    return nil
+                }
+                
+                // 提取生成的游客 Cookie, 主要是 SUB 的值
+                if let cookies = HTTPCookieStorage.shared.cookies(for: tempUrl) {
+                    for cookieItem in cookies {
+                        if cookieItem.name == "SUB" {
+                            cookie = "\(cookieItem.name)=\(cookieItem.value)"
+                            print("🍪 微博游客 Cookie: \(cookie!)")
+                            break
+                        }
+                    }
+                }
+                
+                if cookie == nil {
+                    feedbackMessage = "游客 Cookie 中不含 SUB 的值"
+                    isError = true
+                    return nil
+                }
             }
             
             // 伪造 ajax 请求
@@ -534,10 +512,10 @@ struct ContentView: View {
                 "Accept": "*/*",
                 
                 // 用户代理
-                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "User-Agent": userAgent,
                 
                 //（必不可少）Cookie
-                "Cookie": cookie,
+                "Cookie": cookie!,
             ]
             
             // 更新要访问的 url
@@ -550,14 +528,92 @@ struct ContentView: View {
             // [2024-04-03] 从今天开始, 我们不再直接使用 App 自带的 HTTP 请求
             // let html = try String(contentsOf: url)
             
-            // 伪造浏览器的 http 请求, 以获取网页的 html 文本
-            headers = [
-                "Accept": "*/*",
+            if (selectedDownloader == .xhsVid && saveOriginalVideo) {
+                // 提取 Cookie
+                let cookie: String
                 
-                //（必不可少）用户代理
-                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-            ]
-            tgtUrl = url
+                if (!xhsCookie.isEmpty) {
+                    // 配置了 Cookie
+                    cookie = xhsCookie
+                } else {
+                    // 没有配置 Cookies
+                    feedbackMessage = "请配置 Cookies"
+                    isError = true
+                    return nil
+                }
+                
+                // 伪造浏览器的 http 请求, 通过 307 重定向来获取真实地址
+                headers = [
+                    "Accept": "*/*",
+                    
+                    //（必不可少）用户代理
+                    "User-Agent": userAgent,
+                    
+                    //（必不可少）Cookie
+                    "Cookie": cookie
+                ]
+                
+                // 获取 url 的 host 属性
+                if let host = url.host {
+                    // 如果域名是 xhslink.com 则需要重定向
+                    if host == "xhslink.com" {
+                        // 创建一个临时请求
+                        var tempRequest = URLRequest(url: url)
+                        
+                        // 设置请求头的信息x
+                        tempRequest.allHTTPHeaderFields = headers
+                        
+                        // 创建一个自定义的 URLSessionDelegate 来处理重定向
+                        class RedirectHandler: NSObject, URLSessionDelegate, URLSessionTaskDelegate {
+                            
+                            // 禁止自动重定向
+                            func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest, completionHandler: @escaping (URLRequest?) -> Void) {
+                                // 不进行自动重定向, 传递 nil 继续使用当前响应
+                                completionHandler(nil)
+                            }
+                        }
+                        
+                        // 创建 URLSessionConfiguration
+                        let config = URLSessionConfiguration.default
+                        
+                        // 创建一个自定义的 URLSession, 指定代理
+                        let session = URLSession(configuration: config, delegate: RedirectHandler(), delegateQueue: nil)
+                        
+                        // 发起临时请求
+                        let (_, response) = try await session.data(for: tempRequest)
+                        guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 307 else {
+                            feedbackMessage = "重定向异常"
+                            isError = true
+                            return nil
+                        }
+                        
+                        // 获取 Location 属性
+                        guard let location = httpResponse.allHeaderFields["Location"] as? String else {
+                            feedbackMessage = "重定向失败: Location 属性不存在"
+                            isError = true
+                            return nil
+                        }
+                        
+                        // 更新要访问的 url
+                        tgtUrl = URL(string: location)!
+                    } else {
+                        tgtUrl = url
+                    }
+                } else {
+                    feedbackMessage = "网络请求异常: host 属性不存在"
+                    isError = true
+                    return nil
+                }
+            } else {
+                // 伪造浏览器的 http 请求, 以获取网页的 html 文本
+                headers = [
+                    "Accept": "*/*",
+                    
+                    //（必不可少）用户代理
+                    "User-Agent": userAgent
+                ]
+                tgtUrl = url
+            }
         }
         
         // 创建一个网络请求
@@ -687,11 +743,14 @@ struct ContentView: View {
     func parsingResponse(text: String) -> [String] {
         switch selectedDownloader {
         case .xhsVid: // 小红书视频下载器
-            // let pattern = #""originVideoKey":"([^"]+)""#
-            // let prefix = "https://sns-video-al.xhscdn.com/"
-            // return extractUrls(from: text, withPattern: pattern, prefix: prefix)
-            let pattern = #"<meta\s+name="og:video"\s+content="([^"]+)""#
-            return extractUrls(from: text, withPattern: pattern)
+            if (saveOriginalVideo) {
+                 let pattern = #""originVideoKey":"([^"]+)""#
+                 let prefix = "https://sns-video-al.xhscdn.com/"
+                 return extractUrls(from: text, withPattern: pattern, prefix: prefix)
+            } else {
+                let pattern = #"<meta\s+name="og:video"\s+content="([^"]+)""#
+                return extractUrls(from: text, withPattern: pattern)
+            }
             
         case .mysImg: // 米游社图片下载器
             let pattern = #""images"\s*:\s*\[([^\]]+)\]"#
