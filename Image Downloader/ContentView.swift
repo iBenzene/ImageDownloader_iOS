@@ -11,7 +11,7 @@ import Photos
 
 enum ImageDownloaderType: String, CaseIterable {
     case xhsImg = "小红书图片下载器"
-    case xhsLiveImg = "小红书实况图片下载器（Beta 版）"
+    case xhsLiveImg = "小红书实况图片下载器（测试版）"
     case xhsVid = "小红书视频下载器"
     case mysImg = "米游社图片下载器"
     case wbImg = "微博图片下载器"
@@ -471,13 +471,13 @@ struct ContentView: View {
                 ]
                 
                 // 请求体数据
-                let bodyParameters = "cb=visitor_gray_callback&tid=&from=weibo"
+                let bodyData = "cb=visitor_gray_callback&tid=&from=weibo"
                 
                 // 创建一个临时的网络请求
                 var tempRequest = URLRequest(url: tempUrl)
                 tempRequest.httpMethod = "POST"
                 tempRequest.allHTTPHeaderFields = tempHeaders
-                tempRequest.httpBody = bodyParameters.data(using: .utf8)
+                tempRequest.httpBody = bodyData.data(using: .utf8)
                 
                 // 请求生成一个游客 Cookie
                 let (_, response) = try await URLSession.shared.data(for: tempRequest)
@@ -490,10 +490,10 @@ struct ContentView: View {
                 }
                 
                 // 提取生成的游客 Cookie, 主要是 SUB 的值
-                if let cookies = HTTPCookieStorage.shared.cookies(for: tempUrl) {
-                    for cookieItem in cookies {
-                        if cookieItem.name == "SUB" {
-                            cookie = "\(cookieItem.name)=\(cookieItem.value)"
+                if let visitorCookie = HTTPCookieStorage.shared.cookies(for: tempUrl) {
+                    for visitorCookieItem in visitorCookie {
+                        if visitorCookieItem.name == "SUB" {
+                            cookie = "\(visitorCookieItem.name)=\(visitorCookieItem.value)"
                             print("🍪 微博游客 Cookie: \(cookie!)")
                             break
                         }
