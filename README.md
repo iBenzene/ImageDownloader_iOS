@@ -9,7 +9,7 @@
 ❤️ 或许「**苯苯存图**」可以帮助你～
 
 <div align=center>
-  <img src="https://cdn.ibz0.cn/image-downloader/Preview_iOS.png" alt="预览图" width="50%"></img>
+  <img src="https://cdn.ibzn/image-downloader/Preview_iOS.png" alt="预览图" width="50%"></img>
 </div>
 
 ## 快速开始
