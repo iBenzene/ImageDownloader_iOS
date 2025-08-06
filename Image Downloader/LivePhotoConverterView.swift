@@ -9,7 +9,141 @@ import SwiftUI
 import PhotosUI
 import UniformTypeIdentifiers
 
-// 兼容 iOS 15 的 PHPicker 封装
+import SwiftUI
+import PhotosUI
+import UniformTypeIdentifiers
+
+struct LivePhotoConverterView: View {
+    @Environment(\.presentationMode) private var presentationMode
+    
+    @State private var showCoverPicker = false
+    @State private var showVideoPicker = false
+    
+    @State private var coverUrl: URL?
+    @State private var videoUrl: URL?
+    
+    @State private var isProcessing = false
+    @State private var alertMsg    = ""
+    @State private var showAlert   = false
+    
+    var body: some View {
+        ZStack {
+            Color(.systemBackground)
+                .edgesIgnoringSafeArea(.horizontal)
+            
+            // 显示照片（全屏铺满）
+            if let coverUrl = coverUrl,
+               let image = UIImage(contentsOfFile: coverUrl.path) {
+                
+                GeometryReader { proxy in
+                    let fullWidth = proxy.size.width           // 可用宽度（含安全区）
+                    
+                    Image(uiImage: image)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)        // 保持比例, 且不裁切
+                        .frame(width: fullWidth)               // 宽度占满
+                        .position(x: fullWidth / 2,            // 垂直方向居中显示
+                                  y: proxy.size.height / 2)
+                }
+                .background(Color(.systemBackground))          // 剩余区域与系统背景同色
+                .transition(.opacity)
+            } else {
+                // 尚未选择封面时的占位
+                VStack(spacing: 12) {
+                    Image(systemName: "photo.on.rectangle")
+                        .font(.system(size: 72))
+                        .foregroundColor(.secondary)
+                    Text("请先选择实况封面")
+                        .foregroundColor(.secondary)
+                }
+            }
+            
+            // 「合成中」浮层
+            if isProcessing {
+                ProgressView("合成中...") 
+                    .padding(.horizontal, 32)
+                    .padding(.vertical, 14)
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
+            }
+        }
+        .navigationBarTitle("实况图片转换器", displayMode: .inline)
+        .navigationBarItems(trailing: trailingBarItem)
+        .onAppear { if coverUrl == nil { showCoverPicker = true } } // 进入页面时, 立即选择封面
+        .sheet(isPresented: $showCoverPicker) { coverPicker }
+        .sheet(isPresented: $showVideoPicker) { videoPicker }
+        .alert(isPresented: $showAlert) {
+            Alert(title: Text(alertMsg),
+                  dismissButton: .default(Text("好的")) {
+                presentationMode.wrappedValue.dismiss() // 返回主页
+            })
+        }
+    }
+    
+    // 仅在选完封面后显示「下一步」按钮
+    @ViewBuilder
+    private var trailingBarItem: some View {
+        if coverUrl != nil && videoUrl == nil {
+            Button("下一步") { showVideoPicker = true }
+        }
+    }
+    
+    // 封面 & 视频 Picker
+    private var coverPicker: some View {
+        ImagePicker(configuration: {
+            var cfg = PHPickerConfiguration(photoLibrary: .shared())
+            cfg.filter = .images; cfg.selectionLimit = 1; return cfg
+        }(), isPresented: $showCoverPicker) { results in
+            handlePickerResults(results, isCover: true)
+        }
+    }
+    private var videoPicker: some View {
+        ImagePicker(configuration: {
+            var cfg = PHPickerConfiguration(photoLibrary: .shared())
+            cfg.filter = .videos; cfg.selectionLimit = 1; return cfg
+        }(), isPresented: $showVideoPicker) { results in
+            handlePickerResults(results, isCover: false)
+        }
+    }
+    
+    // 处理选取结果
+    private func handlePickerResults(_ results: [PHPickerResult], isCover: Bool) {
+        guard let item = results.first else { return }
+        let typeID = isCover ? UTType.image.identifier : UTType.movie.identifier
+        item.itemProvider.loadFileRepresentation(forTypeIdentifier: typeID) { tmpUrl, _ in
+            guard let tmpUrl = tmpUrl else { return }
+            let dstUrl = FileManager.default.temporaryDirectory
+                .appendingPathComponent(tmpUrl.lastPathComponent)
+            try? FileManager.default.removeItem(at: dstUrl)
+            try? FileManager.default.copyItem(at: tmpUrl, to: dstUrl)
+            DispatchQueue.main.async {
+                if isCover {
+                    coverUrl = dstUrl // 选封面 👉 等待「下一步」
+                } else {
+                    videoUrl = dstUrl // 选视频 👉 立即合成
+                    startConvert()
+                }
+            }
+        }
+    }
+    
+    // 合成 Live Photo, 并保存到相册
+    private func startConvert() {
+        guard let cover = coverUrl, let video = videoUrl else { return }
+        isProcessing = true
+        
+        let helper = LivePhotoHelper()
+        helper.saveLivePhoto(cover, videoUrl: video) { success, error in
+            DispatchQueue.main.async {
+                isProcessing = false
+                alertMsg = success ? "实况照片已保存 🎉" :
+                (error?.localizedDescription ?? "实况照片合成失败 ❌")
+                showAlert = true
+            }
+        }
+    }
+}
+
+// ImagePicker 组件, 用于选择封面或视频
 struct ImagePicker: UIViewControllerRepresentable {
     let configuration: PHPickerConfiguration
     @Binding var isPresented: Bool
@@ -32,211 +166,6 @@ struct ImagePicker: UIViewControllerRepresentable {
                     didFinishPicking results: [PHPickerResult]) {
             parent.isPresented = false
             parent.onCompletion(results)
-        }
-    }
-}
-
-struct LivePhotoConverterView: View {
-    
-    // Picker states
-    @State private var showCoverPicker = false
-    @State private var showVideoPicker = false
-    
-    @State private var coverUrl: URL?
-    @State private var videoUrl: URL?
-    @State private var coverThumbnail: Image?
-    
-    // Progress & Alerts
-    @State private var isSaving = false
-    @State private var showResultAlert = false
-    @State private var saveSucceeded = false
-    @State private var errorMessage: String?
-    
-    // Helper instance
-    private let helper = LivePhotoHelper()
-    
-    var body: some View {
-        NavigationView {
-            VStack(spacing: 24) {
-                
-                // 1️⃣ 实况封面选择按钮、实况封面预览
-                Button(action: { showCoverPicker = true }) {
-                    HStack {
-                        Image(systemName: "photo")
-                        Text(coverUrl == nil ? "选择实况封面" : "重新选择封面")
-                    }
-                    .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-                .sheet(isPresented: $showCoverPicker) {
-                    ImagePicker(configuration: photoConfig,
-                                isPresented: $showCoverPicker,
-                                onCompletion: handleCoverPicked)
-                }
-                
-                if let thumbnail = coverThumbnail {
-                    thumbnail
-                        .resizable()
-                        .scaledToFit()
-                        .frame(height: 160)
-                        .cornerRadius(12)
-                        .shadow(radius: 4)
-                }
-                
-                // 2️⃣ 实况视频选择按钮
-                Button(action: { showVideoPicker = true }) {
-                    HStack {
-                        Image(systemName: "video")
-                        Text(videoUrl == nil ? "选择实况视频" : "重新选择视频")
-                    }
-                    .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-                .sheet(isPresented: $showVideoPicker) {
-                    ImagePicker(configuration: videoConfig,
-                                isPresented: $showVideoPicker,
-                                onCompletion: handleVideoPicked)
-                }
-                
-                // 3️⃣ 保存 Live Photo
-                Button(action: saveLivePhoto) {
-                    Label("保存为「实况图片」", systemImage: "square.and.arrow.down")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.bordered)
-                .disabled(!readyToSave)
-                
-                if isSaving {
-                    ProgressView("保存中...")
-                        .padding(.top, 8)
-                }
-                
-                Spacer()
-            }
-            .padding()
-            .alert(isPresented: $showResultAlert) {
-                if saveSucceeded {
-                    return Alert(
-                        title: Text("✅ 已保存"),
-                        message: Text("实况图片已保存至系统相册。"),
-                        dismissButton: .default(Text("好的"))
-                    )
-                } else {
-                    return Alert(
-                        title: Text("❌ 保存失败"),
-                        message: Text(errorMessage ?? "未知错误"),
-                        dismissButton: .default(Text("知道了"))
-                    )
-                }
-            }
-        } // NavigationView
-        .navigationBarTitle("实况图片转换器", displayMode: .inline)
-    }
-}
-
-// Picker configurations
-private extension LivePhotoConverterView {
-    // 只允许选 1 张图片
-    var photoConfig: PHPickerConfiguration {
-        var cfg = PHPickerConfiguration()
-        cfg.selectionLimit = 1
-        cfg.filter = .images
-        return cfg
-    }
-    
-    // 只允许选 1 段视频
-    var videoConfig: PHPickerConfiguration {
-        var cfg = PHPickerConfiguration()
-        cfg.selectionLimit = 1
-        cfg.filter = .videos
-        return cfg
-    }
-}
-
-// Helper actions
-private extension LivePhotoConverterView {
-    
-    var readyToSave: Bool { coverUrl != nil && videoUrl != nil && !isSaving }
-    
-    // 处理选中的实况封面
-    func handleCoverPicked(_ results: [PHPickerResult]) {
-        guard let first = results.first else { return }
-        copyMediaPicked(from: first, preferredUTI: .image) { url in
-            coverUrl = url
-            if let data = try? Data(contentsOf: url),
-               let uiImg = UIImage(data: data) {
-                coverThumbnail = Image(uiImage: uiImg)
-            }
-        }
-    }
-    
-    // 处理选中的实况视频
-    func handleVideoPicked(_ results: [PHPickerResult]) {
-        guard let first = results.first else { return }
-        copyMediaPicked(from: first, preferredUTI: .movie) { url in
-            videoUrl = url
-        }
-    }
-    
-    // 复制一份选中的封面或视频, 存放到临时目录, 并返回其 URL
-    // @param result:       选择器回调的 PHPickerResult
-    // @param preferredUTI: 期望的 UTType，例如 .image 或 .movie
-    // @param completion:   返回本地可读写的 URL
-    func copyMediaPicked(from result: PHPickerResult,
-                   preferredUTI: UTType,
-                   completion: @escaping (URL) -> Void) {
-        
-        let provider = result.itemProvider
-        
-        // 先找一个 provider 能满足的 UTI
-        let typeIdentifier: String
-        if provider.hasItemConformingToTypeIdentifier(preferredUTI.identifier) {
-            typeIdentifier = preferredUTI.identifier
-        } else {
-            // 退而求其次, 用它能提供的第一个类型
-            typeIdentifier = provider.registeredTypeIdentifiers.first!
-        }
-        
-        provider.loadFileRepresentation(forTypeIdentifier: typeIdentifier) { url, error in
-            guard let srcUrl = url else {
-                print("⚠️ 实况封面或视频 loadFileRepresentation 失败: ", error ?? "未知错误")
-                return
-            }
-            
-            // 复制到临时目录, 并保留其扩展名
-            let destUrl = URL(fileURLWithPath: NSTemporaryDirectory())
-                .appendingPathComponent(UUID().uuidString)
-                .appendingPathExtension(srcUrl.pathExtension)
-            
-            do {
-                try FileManager.default.copyItem(at: srcUrl, to: destUrl)
-                DispatchQueue.main.async { completion(destUrl) }
-            } catch {
-                print("⚠️ 实况封面或视频复制到临时目录失败: ", error)
-            }
-        }
-    }
-    
-    // 调用 Live Photo Helper 接口, 保存 Live Photo
-    func saveLivePhoto() {
-        guard let cUrl = coverUrl, let vUrl = videoUrl else { return }
-        isSaving = true
-        helper.saveLivePhoto(cUrl, videoUrl: vUrl) { success, error in
-            DispatchQueue.main.async {
-                isSaving = false
-                saveSucceeded = success
-                errorMessage = error?.localizedDescription
-                showResultAlert = true
-                
-                // 删除临时文件
-                if success {
-                    try? FileManager.default.removeItem(at: cUrl)
-                    try? FileManager.default.removeItem(at: vUrl)
-                    coverUrl = nil
-                    videoUrl = nil
-                    coverThumbnail = nil
-                }
-            }
         }
     }
 }
