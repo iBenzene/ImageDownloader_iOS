@@ -667,7 +667,7 @@ struct ContentView: View {
         return String((0..<length).compactMap { _ in characters.randomElement() })
     }
     
-    // 解析 HTML 文本, 提取实况封面的 URL, 同时使用「红薯库」提供的 API, 获取实况视频的 URL
+    // 解析 HTML 文本, 提取实况封面的 URL, 同时使用微信小程序的公共 API, 获取实况视频的 URL
     func parsingResponse(text: String, url: URL) async throws -> [(String, String)] {
         let pattern = #"<meta\s+name="og:image"\s+content="([^"]+)""#
         let coverUrls = extractUrls(from: text, withPattern: pattern)
@@ -678,14 +678,14 @@ struct ContentView: View {
         // 随机生成 sign, 作用未知
         let sign = randomHexString(length: 32)
         
-        // 构建要访问的 URL
-        let tgtUrlString = "https://honghui.hongshuku.com/app/index.php?i=22&t=0&v=1.0&from=wxapp&c=entry&a=wxapp&do=dongtu&sign=\(sign)&m=qu_y&url=\(url)&openid=\(openId)"
+        // 构建要访问的 URL（公共 API, 可用性无保障）
+        let tgtUrlString = "https://wx.qiaoahao.com/app/index.php?i=22&t=0&v=1.0&from=wxapp&c=entry&a=wxapp&do=dongtu&sign=\(sign)&m=qu_y&url=\(url)&openid=\(openId)"
         guard let tgtUrl = URL(string: tgtUrlString) else {
             // 如果 URL 构建失败, 则返回封面 URL, 视频 URL 为空
             return coverUrls.map { ($0, "") }
         }
         
-        // 伪造微信小程序的请求, 怕后端会记录日志
+        // 伪造微信小程序的请求, 怕后端会记录日志, 防止频繁请求被标记
         let headers = [
             "Accept": "*/*",
             "Accept-Encoding": "gzip, compress, br, deflate",
