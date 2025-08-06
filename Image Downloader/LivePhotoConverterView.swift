@@ -55,7 +55,12 @@ struct LivePhotoConverterView: View {
                         .foregroundColor(.secondary)
                     Text("请先选择实况封面")
                         .foregroundColor(.secondary)
-                }
+                }.contentShape(Rectangle())           // 使整个占位区域可点击
+                    .onTapGesture {
+                        withAnimation(.easeIn(duration: 0.2)) {
+                            showCoverPicker = true // 再次弹出封面选择器
+                        }
+                    }
             }
             
             // 「合成中」浮层
