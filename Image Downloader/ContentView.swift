@@ -23,7 +23,8 @@ struct ContentView: View {
     
     @State private var isError: Bool = false
     @State private var isDownloading: Bool = false
-    @State private var isShowingSettings = false
+    @State private var showingLivePhotoConverter = false
+    @State private var showingSettings = false
     @State private var selectedDownloader: ImageDownloaderType = .xhsImg
     
     @AppStorage("xhsCookie") private var xhsCookie: String = ""
@@ -74,10 +75,17 @@ struct ContentView: View {
                         Divider()
                         
                         Button {
-                            isShowingSettings = true
+                            showingLivePhotoConverter = true
+                        } label: {
+                            Label("实况图片转换器", systemImage: "livephoto")
+                        }
+                        
+                        Button {
+                            showingSettings = true
                         } label: {
                             Label("设置", systemImage: "gear")
                         }
+                        
                     } label: {
                         Image(systemName: "ellipsis.circle")
                             .resizable()
@@ -88,10 +96,18 @@ struct ContentView: View {
                 }
                 .padding([.top, .bottom])
                 
+                // 用于跳转到「实况图片转换器」页面
+                NavigationLink(
+                    destination: LivePhotoConverterView(),
+                    isActive: $showingLivePhotoConverter,
+                    label: { EmptyView() }
+                )
+                .hidden()
+                
                 // 用于跳转到「设置」界面
                 NavigationLink(
                     destination: SettingsView(),
-                    isActive: $isShowingSettings,
+                    isActive: $showingSettings,
                     label: { EmptyView() }
                 )
                 .hidden()
@@ -251,14 +267,14 @@ struct ContentView: View {
                                 return
                             }
                             
-                            // 提取实况封面的 url
+                            // 提取实况封面的 URL
                             guard let coverUrl = URL(string: mediaUrlTuple.0) else {
                                 feedbackMessage = "提取的实况封面链接不是合法的 URL（\(index + 1) / \(mediaUrls.count)）"
                                 isError = true
                                 return
                             }
                             
-                            // 提取实况视频的 url
+                            // 提取实况视频的 URL
                             let videoUrl: URL?
                             if mediaUrlTuple.1.isEmpty {
                                 videoUrl = nil
@@ -351,25 +367,25 @@ struct ContentView: View {
         }
     }
     
-    // 发起网络请求, 获取包含目标资源 url 的文本或对象
+    // 发起网络请求, 获取包含目标资源 URL 的文本或对象
     func fetchUrl(url: URL) async throws -> String? {
-        // 声明要访问的 url
+        // 声明要访问的 URL
         let tgtUrl: URL
         
         // 声明伪造的请求头
         let headers: [String: String]
         
         switch selectedDownloader {
-        // [2024-06-18] 小红书更新了, 只有在提供 Cookie 时, 才会暴露 originVideoKey 参数
-        // [2025-01-12] 小红书更新了, 现在会直接暴露无水印视频的 URL, 不用再自己构造了
-        // case .xhsVid: // 小红书视频下载器
-        // ...
+            // [2024-06-18] 小红书更新了, 只有在提供 Cookie 时, 才会暴露 originVideoKey 参数
+            // [2025-01-12] 小红书更新了, 现在会直接暴露无水印视频的 URL, 不用再自己构造了
+            // case .xhsVid: // 小红书视频下载器
+            // ...
             
         case .mysImg: // 米游社图片下载器
             let apiUrl: URL
             
-            // 提取文章 id
-            if let id = url.absoluteString.components(separatedBy: "/").last { // 为什么不直接使用 pathComponents.last 呢？因为会被 url 中的「?」干扰
+            // 提取文章 ID
+            if let id = url.absoluteString.components(separatedBy: "/").last { // 为什么不直接使用 pathComponents.last 呢？因为会被 URL 中的「?」干扰
                 apiUrl = URL(string: "https://bbs-api.miyoushe.com/post/wapi/getPostFull?gids=2&post_id=\(id)&read=1")!
             } else {
                 feedbackMessage = "提取文章 ID 失败"
@@ -377,7 +393,7 @@ struct ContentView: View {
                 return nil
             }
             
-            // 伪造 ajax 请求
+            // 伪造 AJAX 请求
             headers = [
                 "Accept": "*/*",
                 
@@ -388,13 +404,13 @@ struct ContentView: View {
                 "User-Agent": userAgent
             ]
             
-            // 更新要访问的 url
+            // 更新要访问的 URL
             tgtUrl = apiUrl
             
         case .wbImg: // 微博图片下载器
             let apiUrl: URL
             
-            // 提取微博 id
+            // 提取微博 ID
             if let id = url.pathComponents.last?.split(separator: "?").first {
                 apiUrl = URL(string:                    "https://weibo.com/ajax/statuses/show?id=\(id)&locale=zh-CN")!
             } else {
@@ -507,7 +523,7 @@ struct ContentView: View {
                 }
             }
             
-            // 伪造 ajax 请求
+            // 伪造 AJAX 请求
             headers = [
                 "Accept": "*/*",
                 
@@ -518,11 +534,11 @@ struct ContentView: View {
                 "Cookie": cookie!,
             ]
             
-            // 更新要访问的 url
+            // 更新要访问的 URL
             tgtUrl = apiUrl
             
         default: // 小红书图片下载器、(2025-01-12 新增) 小红书动态图片下载器、小红书视频下载器
-            // ToDo: 对于像 http://xhslink.com/TMTJmy 这种动态网页, html 文本中不包含目标图片的链接, 仍存在改进空间
+            // ToDo: 对于像 http://xhslink.com/TMTJmy 这种动态网页, HTML 文本中不包含目标图片的链接, 仍存在改进空间
             
             // [2024-03-29] 小红书开始检查请求的 User-Agent 字段了, 应该伪造浏览器的 HTTP 请求, 而不是使用 App 自带的 HTTP 请求
             // [2024-04-03] 从今天开始, 我们不再直接使用 App 自带的 HTTP 请求
@@ -542,7 +558,7 @@ struct ContentView: View {
                     return nil
                 }
                 
-                // 伪造浏览器的 http 请求, 通过 307 重定向来获取真实地址
+                // 伪造浏览器的 HTTP 请求, 通过 307 重定向来获取真实地址
                 headers = [
                     "Accept": "*/*",
                     
@@ -553,14 +569,14 @@ struct ContentView: View {
                     "Cookie": cookie
                 ]
                 
-                // 获取 url 的 host 属性
+                // 获取 URL 的 Host 头
                 if let host = url.host {
                     // 如果域名是 xhslink.com 则需要重定向
                     if host == "xhslink.com" {
                         // 创建一个临时请求
                         var tempRequest = URLRequest(url: url)
                         
-                        // 设置请求头的信息x
+                        // 设置请求头的信息
                         tempRequest.allHTTPHeaderFields = headers
                         
                         // 创建一个自定义的 URLSessionDelegate 来处理重定向
@@ -594,7 +610,7 @@ struct ContentView: View {
                             return nil
                         }
                         
-                        // 更新要访问的 url
+                        // 更新要访问的 URL
                         tgtUrl = URL(string: location)!
                     } else {
                         tgtUrl = url
@@ -605,7 +621,7 @@ struct ContentView: View {
                     return nil
                 }
             } else {
-                // 伪造浏览器的 http 请求, 以获取网页的 html 文本
+                // 伪造浏览器的 HTTP 请求, 以获取网页的 HTML 文本
                 headers = [
                     "Accept": "*/*",
                     
@@ -651,7 +667,7 @@ struct ContentView: View {
         return String((0..<length).compactMap { _ in characters.randomElement() })
     }
     
-    // 解析 html 文本, 提取实况封面的 url, 同时使用「红薯库」提供的 api, 获取实况视频的 url
+    // 解析 HTML 文本, 提取实况封面的 URL, 同时使用「红薯库」提供的 API, 获取实况视频的 URL
     func parsingResponse(text: String, url: URL) async throws -> [(String, String)] {
         let pattern = #"<meta\s+name="og:image"\s+content="([^"]+)""#
         let coverUrls = extractUrls(from: text, withPattern: pattern)
@@ -662,10 +678,10 @@ struct ContentView: View {
         // 随机生成 sign, 作用未知
         let sign = randomHexString(length: 32)
         
-        // 构建要访问的 url
+        // 构建要访问的 URL
         let tgtUrlString = "https://honghui.hongshuku.com/app/index.php?i=22&t=0&v=1.0&from=wxapp&c=entry&a=wxapp&do=dongtu&sign=\(sign)&m=qu_y&url=\(url)&openid=\(openId)"
         guard let tgtUrl = URL(string: tgtUrlString) else {
-            // 如果 url 构建失败, 则返回封面 url, 视频 url 为空
+            // 如果 URL 构建失败, 则返回封面 URL, 视频 URL 为空
             return coverUrls.map { ($0, "") }
         }
         
@@ -718,14 +734,14 @@ struct ContentView: View {
                 return coverUrls.map { ($0, "") }
             }
             
-            // 解析「红薯库」提供的 json
+            // 解析「红薯库」提供的 JSON
             let liveImageData = response.data
             var result: [(String, String)] = coverUrls.map { ($0, "") } // 这里先把所有 coverUrl 对应的 video 设为空
             var cnt = 0 // 统计实况照片的数目
             for (index, coverUrl) in coverUrls.enumerated() {
-                let coverId = extractID(from: coverUrl)
+                let coverId = extractId(from: coverUrl)
                 
-                if let video = liveImageData.first(where: { extractID(from: $0.poster) == coverId }) {
+                if let video = liveImageData.first(where: { extractId(from: $0.poster) == coverId }) {
                     print("🔍 发现实况图片: \(coverId)")
                     result[index].1 = video.url
                     cnt += 1
@@ -739,14 +755,14 @@ struct ContentView: View {
         }
     }
     
-    // 解析 html 或 json 文本, 提取资源的 url
+    // 解析 HTML 或 JSON 文本, 提取资源的 URL
     func parsingResponse(text: String) -> [String] {
         switch selectedDownloader {
         case .xhsVid: // 小红书视频下载器
             if (saveOriginalVideo) {
-                 let pattern = #""originVideoKey":"([^"]+)""#
-                 let prefix = "https://sns-video-al.xhscdn.com/"
-                 return extractUrls(from: text, withPattern: pattern, prefix: prefix)
+                let pattern = #""originVideoKey":"([^"]+)""#
+                let prefix = "https://sns-video-al.xhscdn.com/"
+                return extractUrls(from: text, withPattern: pattern, prefix: prefix)
             } else {
                 let pattern = #"<meta\s+name="og:video"\s+content="([^"]+)""#
                 return extractUrls(from: text, withPattern: pattern)
@@ -769,37 +785,37 @@ struct ContentView: View {
     
     
     
-    // 提取资源的 url
+    // 提取资源的 URL
     func extractUrls(from text: String, withPattern pattern: String, prefix: String = "", isJson: Bool = false) -> [String] {
         do {
             // 使用正则表达式创建一个模式匹配器
             let regex = try NSRegularExpression(pattern: pattern, options: [])
             
             if isJson {
-                // 在 json 文本中搜索匹配的部分
+                // 在 JSON 文本中搜索匹配的部分
                 guard let match = regex.firstMatch(in: text, options: [], range: NSRange(text.startIndex..., in: text)),
                       let range = Range(match.range(at: 1), in: text) else {
-                    // 服务器未返回包含目标资源的 url
+                    // 服务器未返回包含目标资源的 URL
                     // 米游社: {"data":null,"message":"Something went wrong...please retry later","retcode":-502}
                     // 微博: {"ok":-100,"url":"https://weibo.com/login.php"}
                     return []
                 }
                 
-                // 获取匹配到的资源 url 或 id 列表, 移除双引号并按逗号进行拆分
+                // 获取匹配到的资源 URL 或 ID 列表, 移除双引号并按逗号进行拆分
                 return String(text[range])
                     .replacingOccurrences(of: "\"", with: "")
                     .components(separatedBy: ",")
                     .map { prefix + $0 }
             } else {
-                // 在 html 文本中搜索匹配的部分
+                // 在 HTML 文本中搜索匹配的部分
                 let matches = regex.matches(in: text, options: [], range: NSRange(text.startIndex..., in: text))
                 
-                // 返回包含所有资源 url 的数组
+                // 返回包含所有资源 URL 的数组
                 return matches.compactMap { match in
                     guard let range = Range(match.range(at: 1), in: text) else {
                         return nil
                     }
-                    // 必要时重新构造资源的 url
+                    // 必要时重新构造资源的 URL
                     return prefix + String(text[range])
                 }
             }
@@ -808,12 +824,12 @@ struct ContentView: View {
         }
     }
     
-    // 提取资源（主要是动态图片）的 id
-    private func extractID(from urlString: String) -> String {
+    // 提取资源（主要是动态图片）的 ID
+    private func extractId(from urlString: String) -> String {
         guard let lastComponent = urlString.split(separator: "/").last else {
             return ""
         }
-        // 有些 url 可能没有 !, 所以这里使用 first ?? ""
+        // 有些 URL 可能没有 !, 所以这里使用 first ?? ""
         let idPart = lastComponent.split(separator: "!").first ?? ""
         return String(idPart)
     }

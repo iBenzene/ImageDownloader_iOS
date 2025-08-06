@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		4435AD7C2E4270F10000B654 /* LivePhotoConverterView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4435AD7B2E4270F10000B654 /* LivePhotoConverterView.swift */; };
 		448856E92B3AB4B9007B55EC /* Image_DownloaderApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 448856E82B3AB4B9007B55EC /* Image_DownloaderApp.swift */; };
 		448856EB2B3AB4B9007B55EC /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 448856EA2B3AB4B9007B55EC /* ContentView.swift */; };
 		448856ED2B3AB4BA007B55EC /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 448856EC2B3AB4BA007B55EC /* Assets.xcassets */; };
@@ -38,6 +39,7 @@
 /* Begin PBXFileReference section */
 		442509402C29613F00C61E26 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
 		442509412C29D58200C61E26 /* LICENSE */ = {isa = PBXFileReference; lastKnownFileType = text; path = LICENSE; sourceTree = "<group>"; };
+		4435AD7B2E4270F10000B654 /* LivePhotoConverterView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LivePhotoConverterView.swift; sourceTree = "<group>"; };
 		448856E52B3AB4B9007B55EC /* Image Downloader.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Image Downloader.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		448856E82B3AB4B9007B55EC /* Image_DownloaderApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Image_DownloaderApp.swift; sourceTree = "<group>"; };
 		448856EA2B3AB4B9007B55EC /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
@@ -112,6 +114,7 @@
 				44FC114F2C1B81DC00883582 /* SettingsView.swift */,
 				448856EC2B3AB4BA007B55EC /* Assets.xcassets */,
 				448856EE2B3AB4BA007B55EC /* Preview Content */,
+				4435AD7B2E4270F10000B654 /* LivePhotoConverterView.swift */,
 			);
 			path = "Image Downloader";
 			sourceTree = "<group>";
@@ -280,6 +283,7 @@
 				44FC11502C1B81DC00883582 /* SettingsView.swift in Sources */,
 				448856EB2B3AB4B9007B55EC /* ContentView.swift in Sources */,
 				44FA6A8B2D32B1BB00D55A8E /* LivePhotoHelper.m in Sources */,
+				4435AD7C2E4270F10000B654 /* LivePhotoConverterView.swift in Sources */,
 				448856E92B3AB4B9007B55EC /* Image_DownloaderApp.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
