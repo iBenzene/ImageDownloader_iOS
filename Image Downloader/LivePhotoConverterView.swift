@@ -7,24 +7,27 @@
 
 import SwiftUI
 import PhotosUI
-import UniformTypeIdentifiers
 
-import SwiftUI
-import PhotosUI
-import UniformTypeIdentifiers
-
+// MARK: - 实况照片转换器视图
 struct LivePhotoConverterView: View {
     @Environment(\.presentationMode) private var presentationMode
     
+    // 弹窗开关
     @State private var showCoverPicker = false
     @State private var showVideoPicker = false
     
+    // 业务数据
     @State private var coverUrl: URL?
     @State private var videoUrl: URL?
     
+    // UI 状态
     @State private var isProcessing = false
     @State private var alertMsg    = ""
     @State private var showAlert   = false
+    
+    // iOS 16 原生 PhotosPicker 的选中项
+    @State private var coverItem: PhotosPickerItem?
+    @State private var videoItem: PhotosPickerItem?
     
     var body: some View {
         ZStack {
@@ -55,7 +58,7 @@ struct LivePhotoConverterView: View {
                         .foregroundColor(.secondary)
                     Text("请先选择实况封面")
                         .foregroundColor(.secondary)
-                }.contentShape(Rectangle())           // 使整个占位区域可点击
+                }.contentShape(Rectangle()) // 使整个占位区域可点击
                     .onTapGesture {
                         withAnimation(.easeIn(duration: 0.2)) {
                             showCoverPicker = true // 再次弹出封面选择器
@@ -65,7 +68,7 @@ struct LivePhotoConverterView: View {
             
             // 「合成中」浮层
             if isProcessing {
-                ProgressView("合成中...") 
+                ProgressView("合成中...")
                     .padding(.horizontal, 32)
                     .padding(.vertical, 14)
                     .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
@@ -73,9 +76,37 @@ struct LivePhotoConverterView: View {
         }
         .navigationBarTitle("实况图片转换器", displayMode: .inline)
         .navigationBarItems(trailing: trailingBarItem)
-        .onAppear { if coverUrl == nil { showCoverPicker = true } } // 进入页面时, 立即选择封面
-        .sheet(isPresented: $showCoverPicker) { coverPicker }
-        .sheet(isPresented: $showVideoPicker) { videoPicker }
+        .onAppear {
+            cleanupWorkDir() // 页面加载时清理一次缓存
+            if coverUrl == nil {
+                showCoverPicker = true // 进入页面时, 立即选择封面
+            }
+        }
+        .onDisappear {
+            // 页面退出时清理一次缓存
+            cleanupWorkDir()
+        }
+        // iOS16 原生 PhotosPicker
+        .photosPicker(
+            isPresented: $showCoverPicker,
+            selection: $coverItem,
+            matching: .images
+        )
+        .photosPicker(
+            isPresented: $showVideoPicker,
+            selection: $videoItem,
+            matching: .videos
+        )
+        // 监听封面和视频的选取
+        .onChange(of: coverItem) { newItem in
+            guard newItem != nil else { return }
+            Task { await handlePickerResults(newItem, isCover: true) }
+        }
+        .onChange(of: videoItem) { newItem in
+            guard newItem != nil else { return }
+            Task { await handlePickerResults(newItem, isCover: false) }
+        }
+        // 转换完成后的弹窗
         .alert(isPresented: $showAlert) {
             Alert(title: Text(alertMsg),
                   dismissButton: .default(Text("好的")) {
@@ -92,42 +123,28 @@ struct LivePhotoConverterView: View {
         }
     }
     
-    // 封面 & 视频 Picker
-    private var coverPicker: some View {
-        ImagePicker(configuration: {
-            var cfg = PHPickerConfiguration(photoLibrary: .shared())
-            cfg.filter = .images; cfg.selectionLimit = 1; return cfg
-        }(), isPresented: $showCoverPicker) { results in
-            handlePickerResults(results, isCover: true)
-        }
-    }
-    private var videoPicker: some View {
-        ImagePicker(configuration: {
-            var cfg = PHPickerConfiguration(photoLibrary: .shared())
-            cfg.filter = .videos; cfg.selectionLimit = 1; return cfg
-        }(), isPresented: $showVideoPicker) { results in
-            handlePickerResults(results, isCover: false)
-        }
-    }
-    
     // 处理选取结果
-    private func handlePickerResults(_ results: [PHPickerResult], isCover: Bool) {
-        guard let item = results.first else { return }
-        let typeID = isCover ? UTType.image.identifier : UTType.movie.identifier
-        item.itemProvider.loadFileRepresentation(forTypeIdentifier: typeID) { tmpUrl, _ in
-            guard let tmpUrl = tmpUrl else { return }
-            let dstUrl = FileManager.default.temporaryDirectory
-                .appendingPathComponent(tmpUrl.lastPathComponent)
-            try? FileManager.default.removeItem(at: dstUrl)
-            try? FileManager.default.copyItem(at: tmpUrl, to: dstUrl)
-            DispatchQueue.main.async {
+    private func handlePickerResults(_ item: PhotosPickerItem?, isCover: Bool) async {
+        guard let item else { return }
+        do {
+            if let data = try await item.loadTransferable(type: Data.self) {
+                let dir = try workDir()
+                let filename = await item.itemIdentifier()
+                let dstUrl = dir.appendingPathComponent(filename)
+                
+                try? FileManager.default.removeItem(at: dstUrl)
+                try data.write(to: dstUrl)
+                
                 if isCover {
-                    coverUrl = dstUrl // 选封面 👉 等待「下一步」
+                    coverUrl = dstUrl
                 } else {
-                    videoUrl = dstUrl // 选视频 👉 立即合成
+                    videoUrl = dstUrl
                     startConvert()
                 }
             }
+        } catch {
+            alertMsg = "读取选取的项目失败：\(error.localizedDescription)"
+            showAlert = true
         }
     }
     
@@ -148,33 +165,34 @@ struct LivePhotoConverterView: View {
     }
 }
 
-// ImagePicker 组件, 用于选择封面或视频
-struct ImagePicker: UIViewControllerRepresentable {
-    let configuration: PHPickerConfiguration
-    @Binding var isPresented: Bool
-    var onCompletion: ([PHPickerResult]) -> Void
-    
-    func makeUIViewController(context: Context) -> PHPickerViewController {
-        let picker = PHPickerViewController(configuration: configuration)
-        picker.delegate = context.coordinator
-        return picker
-    }
-    func updateUIViewController(_ uiViewController: PHPickerViewController, context: Context) {}
-    
-    func makeCoordinator() -> Coordinator { Coordinator(self) }
-    
-    class Coordinator: NSObject, PHPickerViewControllerDelegate {
-        private let parent: ImagePicker
-        init(_ parent: ImagePicker) { self.parent = parent }
-        
-        func picker(_ picker: PHPickerViewController,
-                    didFinishPicking results: [PHPickerResult]) {
-            parent.isPresented = false
-            parent.onCompletion(results)
+private extension PhotosPickerItem {
+    func itemIdentifier() async -> String {
+        if let utType = self.supportedContentTypes.first {
+            let ext = utType.preferredFilenameExtension ?? "bin"
+            return UUID().uuidString + "." + ext
         }
+        return UUID().uuidString
     }
 }
 
+// MARK: - 临时文件管理工具
+private let workDirName = "LivePhotoWork"
+
+private func workDir() throws -> URL {
+    let base = FileManager.default.temporaryDirectory.appendingPathComponent(workDirName, isDirectory: true)
+    if !FileManager.default.fileExists(atPath: base.path) {
+        try FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
+    }
+    return base
+}
+
+private func cleanupWorkDir() {
+    let base = FileManager.default.temporaryDirectory.appendingPathComponent(workDirName, isDirectory: true)
+    try? FileManager.default.removeItem(at: base)
+    print("♻️ 清理缓存：\(base.path)")
+}
+
+// MARK: - 预览
 struct LivePhotoConverterView_Previews: PreviewProvider {
     static var previews: some View {
         LivePhotoConverterView()

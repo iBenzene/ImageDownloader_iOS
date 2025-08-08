@@ -92,6 +92,7 @@ struct ContentView: View {
                     .padding()
                 }
                 .padding([.top, .bottom])
+                .navigationTitle("首页").navigationBarTitleDisplayMode(.inline)
                 
                 // 用于跳转到「实况图片转换器」页面
                 NavigationLink(
