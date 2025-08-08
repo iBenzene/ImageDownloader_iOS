@@ -9,35 +9,18 @@
 import SwiftUI
 
 struct SettingsView: View {
-    @AppStorage("xhsCookie") private var xhsCookie: String = ""
-    @AppStorage("weiboCookie") private var weiboCookie: String = ""
-    @AppStorage("weiboCookiesPoolUrl") private var weiboCookiesPoolUrl: String = ""
-    
-    // 是否要保存原始质量的视频, 目前仅仅给『小红书图片下载器』使用
-    @AppStorage("saveOriginalVideo") private var saveOriginalVideo: Bool = false
-    
+    @AppStorage("backendUrl") private var backendUrl: String = ""
+    @AppStorage("backendToken") private var backendToken: String = ""
+
     var body: some View {
         List {
-            
-            Section(header: Text("小红书").textCase(nil)) {
-                Toggle("保存原始质量的视频", isOn: $saveOriginalVideo)
-                    .tint(.accentColor)
+            Section(header: Text("后端地址").textCase(nil), footer: Text("必须部署后端才能使用下载功能。")) {
+                TextField("请输入后端地址", text: $backendUrl)
             }
-            
-            if saveOriginalVideo {
-                 Section(header: Text("小红书 Cookie").textCase(nil), footer: Text("小红书 Cookie 仅用于下载视频。")) {
-                     TextField("请输入 Cookie", text: $xhsCookie)
-                 }
+
+            Section(header: Text("后端令牌").textCase(nil), footer: Text("令牌必须与后端中的设置保持一致。")) {
+                TextField("请输入后端令牌", text: $backendToken)
             }
-            
-            // [2025-02-01] 由于发现可以使用游客 Cookie 来访问微博的 API, 所以暂时不需要用户自己设置微博的 Cookie 了
-            // Section(header: Text("微博 Cookie").textCase(nil)) {
-            //     TextField("请输入 Cookie", text: $weiboCookie)
-            // }
-            
-            // Section(header: Text("微博 Cookies 池").textCase(nil), footer: Text("微博 Cookies 池仅接受符合特定格式的 JSON 数据，并且会覆盖「微博 Cookie」中填写的内容。")) {
-            //     TextField("请输入 Cookies 池的 URL", text: $weiboCookiesPoolUrl)
-            // }
         }
         .navigationBarTitle("设置", displayMode: .inline)
     }
