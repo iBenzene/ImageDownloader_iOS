@@ -55,7 +55,7 @@
   <img src="https://cdn.ibenzene.net/default/SideStore_Guide_2.jpg" alt="SideStore 侧载指导" width="25%"></img>
 </div>
 
-**步骤五（可选）**如果对官方提供的 iPA 自签名服务不放心，可以自行部署 iPA 自签名服务。（[Anisette Server v3](https://github.com/Dadoum/anisette-v3-server)）
+**步骤五（可选）** 如果对官方提供的 iPA 自签名服务不放心，可以自行部署 iPA 自签名服务。（[Anisette Server v3](https://github.com/Dadoum/anisette-v3-server)）
 
 💡 虽然这种方式的签名有效期也为七天，但是到期之前 **仅需在手机上** 自动续签即可，无需电脑！（签名服务由官方或者你自己部署的 Anisette Server 提供）
 
