@@ -508,7 +508,7 @@ struct ContentView: View {
         request.setValue(userAgent, forHTTPHeaderField: "User-Agent")
         request.timeoutInterval = 30
 
-        print("🔗 向 \(requestUrl) 发送解析请求")
+        print("🔗 向 \(requestUrl) 发起解析请求")
 
         // 发起请求
         let (data, response) = try await URLSession.shared.data(for: request)
