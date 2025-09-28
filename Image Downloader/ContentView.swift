@@ -22,6 +22,7 @@ struct ContentView: View {
     @State private var feedbackMessage: String?
     
     @State private var isError: Bool = false
+    @State private var isWarning: Bool = false
     @State private var isDownloading: Bool = false
     @State private var showingLivePhotoConverter = false
     @State private var showingSettings = false
@@ -174,13 +175,18 @@ struct ContentView: View {
                 if let message = feedbackMessage {
                     Text(message)
                         .font(.footnote)
-                        .foregroundColor(isError ? .red : (isDownloading ? .yellow : .green))
+                        .foregroundColor(isError ? .red : (isWarning ? .yellow : (isDownloading ? .yellow : .green)))
                         .padding()
                 }
             }
             .padding()
             .navigationBarHidden(true)
         }
+    }
+    
+    private func pauseBriefly() async {
+        // 短暂暂停 1 秒
+        try? await Task.sleep(nanoseconds: 1_000_000_000)
     }
     
     // 执行下载操作
@@ -194,12 +200,13 @@ struct ContentView: View {
             return
         }
         let links = linkInput.components(separatedBy: "\n")
-        var cnt = 1
+        var line = 0
         
         for link in links {
+            line += 1
+            
             if link.isEmpty {
                 // 处理空链接
-                cnt += 1
                 continue
             }
             
@@ -210,19 +217,17 @@ struct ContentView: View {
                 
                 guard let url = URL(string: validLink) else {
                     // 处理无效的链接
-                    feedbackMessage = "请检查第 \(cnt) 行包含的链接是否有效"
+                    feedbackMessage = "请检查第 \(line) 行包含的链接是否有效"
                     isError = true
                     return
                 }
                 
                 urls.append(url)
-                cnt += 1
-                
             } else {
-                // 不存在链接
-                feedbackMessage = "请检查第 \(cnt) 行是否包含有效链接"
-                isError = true
-                return
+                // 不存在链接, 直接忽略该行
+                feedbackMessage = "第 \(line) 行不包含链接, 跳过"
+                isWarning = true
+                continue
             }
         }
         
@@ -233,13 +238,16 @@ struct ContentView: View {
             return
         }
         
+        if backendUrl.isEmpty {
+            // 后端地址未配置
+            feedbackMessage = "请在设置中配置后端地址"
+            isError = true
+            return
+        }
+        
+        line = 0
         for url in urls {
-            if backendUrl.isEmpty {
-                // 后端地址未配置
-                feedbackMessage = "请在设置中配置后端地址"
-                isError = true
-                return
-            }
+            line += 1
             
             // 发起网络请求
             do {
@@ -247,11 +255,11 @@ struct ContentView: View {
                 let mediaUrls = try await fetchMediaUrls(url: url)
                 
                 if mediaUrls.isEmpty {
-                    feedbackMessage = "未提取到图片或视频的链接"
+                    feedbackMessage = "【\(line) / \(urls.count)】未提取到图片或视频的链接"
                     isError = true
                     
                     // Debug: 检查提取的媒体链接
-                    print("⚠️ 未提取到图片或视频的链接, 原始 URL: \(url)")
+                    print("⚠️ [\(line) / \(urls.count)] 未提取到图片或视频的链接, 原始 URL: \(url)")
                     return
                 }
                 
@@ -259,14 +267,14 @@ struct ContentView: View {
                 for (index, mediaUrl) in mediaUrls.enumerated() {
                     if selectedDownloader == .xhsLiveImg {
                         guard let mediaUrlTuple = mediaUrl as? (String, String) else {
-                            feedbackMessage = "提取的实况图片链接不是元组类型（\(index + 1) / \(mediaUrls.count)）"
+                            feedbackMessage = "【\(line) / \(urls.count)】提取的实况图片链接不是元组类型（\(index + 1) / \(mediaUrls.count)）"
                             isError = true
                             return
                         }
                         
                         // 提取实况封面的 URL
                         guard let coverUrl = URL(string: mediaUrlTuple.0) else {
-                            feedbackMessage = "提取的实况封面链接不是合法的 URL（\(index + 1) / \(mediaUrls.count)）"
+                            feedbackMessage = "【\(line) / \(urls.count)】提取的实况封面链接不是合法的 URL（\(index + 1) / \(mediaUrls.count)）"
                             isError = true
                             return
                         }
@@ -277,7 +285,7 @@ struct ContentView: View {
                             videoUrl = nil
                         } else {
                             guard let validVideoUrl = URL(string: mediaUrlTuple.1) else {
-                                feedbackMessage = "提取的实况视频链接不是合法的 URL（\(index + 1) / \(mediaUrls.count)）"
+                                feedbackMessage = "【\(line) / \(urls.count)】提取的实况视频链接不是合法的 URL（\(index + 1) / \(mediaUrls.count)）"
                                 isError = true
                                 return
                             }
@@ -287,8 +295,9 @@ struct ContentView: View {
                         do {
                             // 请求下载资源
                             isDownloading = true
-                            feedbackMessage = "下载中..."
+                            feedbackMessage = "【\(line) / \(urls.count)】下载中...（\(index + 1) / \(mediaUrls.count)）"
                             isError = false
+                            isWarning = false
                             
                             // 下载实况封面
                             let (coverData, coverResponse) = try await URLSession.shared.data(from: coverUrl)
@@ -307,34 +316,35 @@ struct ContentView: View {
                             }
                             
                             // 将实况图片保存至相册
-                            saveLiveImageToPhotoLibrary(coverData: coverData, videoData: videoData, currentIndex: index + 1, totalCount: mediaUrls.count)
+                            await saveLiveImageToPhotoLibrary(coverData: coverData, videoData: videoData, currentLine: line, totalLines: urls.count, currentIndex: index + 1, totalCount: mediaUrls.count)
                         } catch {
-                            feedbackMessage = "实况图片下载失败: \(error.localizedDescription)（\(index + 1) / \(mediaUrls.count)）"
+                            feedbackMessage = "【\(line) / \(urls.count)】实况图片下载失败: \(error.localizedDescription)（\(index + 1) / \(mediaUrls.count)）"
                             isError = true
                         }
                     } else {
                         // 将 Unicode 编码 \u002F 替换为 /
                         guard let mediaUrlString = mediaUrl as? String else {
-                            feedbackMessage = "提取的资源链接不是字符串类型（\(index + 1) / \(mediaUrls.count)）"
+                            feedbackMessage = "【\(line) / \(urls.count)】提取的资源链接不是字符串类型（\(index + 1) / \(mediaUrls.count)）"
                             isError = true
                             return
                         }
                         let decodedMediaUrlString = mediaUrlString.replacingOccurrences(of: "\\u002F", with: "/")
                         
                         guard let decodedMediaUrl = URL(string: decodedMediaUrlString) else {
-                            feedbackMessage = "提取的资源链接不是合法的 URL（\(index + 1) / \(mediaUrls.count)）"
+                            feedbackMessage = "【\(line) / \(urls.count)】提取的资源链接不是合法的 URL（\(index + 1) / \(mediaUrls.count)）"
                             isError = true
                             
                             // Debug: 检查提取的链接
-                            print("⚠️ 提取的链接: \(mediaUrl)")
+                            print("⚠️ [\(line) / \(urls.count)] 提取的链接: \(mediaUrl)（\(index + 1) / \(mediaUrls.count)）")
                             return
                         }
                         
                         do {
                             // 请求下载资源
                             isDownloading = true
-                            feedbackMessage = "下载中..."
+                            feedbackMessage = "【\(line) / \(urls.count)】下载中...（\(index + 1) / \(mediaUrls.count)）"
                             isError = false
+                            isWarning = false
                             let (data, response) = try await URLSession.shared.data(from: decodedMediaUrl)
                             
                             // 检查有没有发生错误
@@ -345,13 +355,13 @@ struct ContentView: View {
                             switch selectedDownloader {
                             case .xhsVid: // 小红书视频下载器
                                 // 将视频保存至相册
-                                saveVideoToPhotoLibrary(videoData: data, currentIndex: index + 1, totalCount: mediaUrls.count)
+                                await saveVideoToPhotoLibrary(videoData: data, currentLine: line, totalLines: urls.count, currentIndex: index + 1, totalCount: mediaUrls.count)
                             default: // 图片下载器
                                 // 将图片保存至相册
-                                saveImageToPhotoLibrary(imageData: data, currentIndex: index + 1, totalCount: mediaUrls.count)
+                                await saveImageToPhotoLibrary(imageData: data, currentLine: line, totalLines: urls.count, currentIndex: index + 1, totalCount: mediaUrls.count)
                             }
                         } catch {
-                            feedbackMessage = "图片或视频下载失败: \(error.localizedDescription)（\(index + 1) / \(mediaUrls.count)）"
+                            feedbackMessage = "【\(line) / \(urls.count)】图片或视频下载失败: \(error.localizedDescription)（\(index + 1) / \(mediaUrls.count)）"
                             isError = true
                         }
                     }
@@ -365,63 +375,69 @@ struct ContentView: View {
     }
     
     // 将图片保存至相册
-    func saveImageToPhotoLibrary(imageData: Data, currentIndex: Int, totalCount: Int) {
-        if let image = UIImage(data: imageData) {
-            PHPhotoLibrary.shared().performChanges({
+    func saveImageToPhotoLibrary(imageData: Data, currentLine: Int, totalLines: Int, currentIndex: Int, totalCount: Int) async {
+        guard let image = UIImage(data: imageData) else {
+            feedbackMessage = "【\(currentLine) / \(totalLines)】图片数据无效（\(currentIndex) / \(totalCount)）"
+            isError = true
+            return
+        }
+        do {
+            try await PHPhotoLibrary.shared().performChanges {
                 PHAssetChangeRequest.creationRequestForAsset(from: image)
-            }) { success, error in
-                if success {
-                    isDownloading = false
-                    feedbackMessage = "图片保存成功（\(currentIndex) / \(totalCount)）"
-                    isError = false
-                } else {
-                    feedbackMessage = "图片保存失败: \(error?.localizedDescription ?? "未知错误")（\(currentIndex) / \(totalCount)"
-                    isError = true
-                }
             }
+            isDownloading = false
+            feedbackMessage = "【\(currentLine) / \(totalLines)】图片保存成功（\(currentIndex) / \(totalCount)）"
+            isError = false
+            isWarning = false
+        } catch {
+            feedbackMessage = "【\(currentLine) / \(totalLines)】图片保存失败: \(error.localizedDescription)（\(currentIndex) / \(totalCount)）"
+            isError = true
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
         }
     }
     
     // 将视频保存至相册
-    func saveVideoToPhotoLibrary(videoData: Data, currentIndex: Int, totalCount: Int) {
+    func saveVideoToPhotoLibrary(videoData: Data, currentLine: Int, totalLines: Int, currentIndex: Int, totalCount: Int) async {
         // 将视频数据写入临时文件
         let tempVideoUrl = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("tempVideo.mp4")
         do {
             try videoData.write(to: tempVideoUrl)
         } catch {
-            feedbackMessage = "写入临时视频文件失败: \(error.localizedDescription)"
+            feedbackMessage = "【\(currentLine) / \(totalLines)】写入临时视频文件失败: \(error.localizedDescription)（\(currentIndex) / \(totalCount)）"
             isError = true
             return
         }
         
-        PHPhotoLibrary.shared().performChanges({
-            PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: tempVideoUrl)
-        }) { success, error in
-            if success {
-                isDownloading = false
-                feedbackMessage = "视频保存成功（\(currentIndex) / \(totalCount)）"
-                isError = false
-            } else {
-                feedbackMessage = "视频保存失败: \(error?.localizedDescription ?? "未知错误")（\(currentIndex) / \(totalCount)）"
-                isError = true
+        do {
+            defer {
+                // 清理临时文件
+                do {
+                    try FileManager.default.removeItem(at: tempVideoUrl)
+                    print("♻️ [\(currentLine) / \(totalLines)] 已删除临时视频文件: \(tempVideoUrl)（\(currentIndex) / \(totalCount)）") }
+                catch {
+                    // Debug
+                    print("⚠️ [\(currentLine) / \(totalLines)] 删除临时视频文件失败: \(error)（\(currentIndex) / \(totalCount)）")
+                }
             }
-            
-            // 删除临时视频文件
-            do {
-                try FileManager.default.removeItem(at: tempVideoUrl)
-                print("♻️ 已删除临时视频文件: \(tempVideoUrl)")
-            } catch {
-                // Debug
-                print("⚠️ 删除临时视频文件失败: \(error)")
+            try await PHPhotoLibrary.shared().performChanges {
+                PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: tempVideoUrl)
             }
+            isDownloading = false
+            feedbackMessage = "【\(currentLine) / \(totalLines)】视频保存成功（\(currentIndex) / \(totalCount)）"
+            isError = false
+            isWarning = false
+        } catch {
+            feedbackMessage = "【\(currentLine) / \(totalLines)】视频保存失败: \(error.localizedDescription)（\(currentIndex) / \(totalCount)）"
+            isError = true
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
         }
     }
     
     // 将实况图片保存至相册
-    func saveLiveImageToPhotoLibrary(coverData: Data, videoData: Data?, currentIndex: Int, totalCount: Int) {
+    func saveLiveImageToPhotoLibrary(coverData: Data, videoData: Data?, currentLine: Int, totalLines: Int, currentIndex: Int, totalCount: Int) async {
         guard let videoData = videoData else {
             // 如果没有视频数据, 则当作普通图片保存
-            saveImageToPhotoLibrary(imageData: coverData, currentIndex: currentIndex, totalCount: totalCount)
+            await saveImageToPhotoLibrary(imageData: coverData, currentLine: currentLine, totalLines: totalLines, currentIndex: currentIndex, totalCount: totalCount)
             return
         }
         
@@ -429,7 +445,7 @@ struct ContentView: View {
         do {
             try coverData.write(to: tempCoverUrl)
         } catch {
-            feedbackMessage = "写入临时封面文件失败: \(error.localizedDescription)"
+            feedbackMessage = "【\(currentLine) / \(totalLines)】写入临时封面文件失败: \(error.localizedDescription)（\(currentIndex) / \(totalCount)）"
             isError = true
             return
         }
@@ -438,31 +454,44 @@ struct ContentView: View {
         do {
             try videoData.write(to: tempVideoUrl)
         } catch {
-            feedbackMessage = "写入临时视频文件失败: \(error.localizedDescription)"
+            feedbackMessage = "【\(currentLine) / \(totalLines)】写入临时视频文件失败: \(error.localizedDescription)（\(currentIndex) / \(totalCount)）"
             isError = true
             return
         }
         
-        let livePhotoHelper = LivePhotoHelper()
-        livePhotoHelper.saveLivePhoto(tempCoverUrl, videoUrl: tempVideoUrl) { success, error in
-            if success {
-                isDownloading = false
-                feedbackMessage = "实况图片保存成功（\(currentIndex) / \(totalCount)）"
-                isError = false
-            } else {
-                feedbackMessage = "实况图片保存失败: \(error?.localizedDescription ?? "未知错误")（\(currentIndex) / \(totalCount)）"
-                isError = true
+        do {
+            defer {
+                do {
+                    try FileManager.default.removeItem(at: tempCoverUrl)
+                    try FileManager.default.removeItem(at: tempVideoUrl)
+                    print("♻️ [\(currentLine) / \(totalLines)] 已删除临时文件: \(tempCoverUrl), \(tempVideoUrl)（\(currentIndex) / \(totalCount)）")
+                } catch {
+                    // Debug
+                    print("⚠️ [\(currentLine) / \(totalLines)] 删除临时文件失败: \(error)（\(currentIndex) / \(totalCount)）")
+                }
             }
             
-            // 删除临时文件
-            do {
-                try FileManager.default.removeItem(at: tempCoverUrl)
-                try FileManager.default.removeItem(at: tempVideoUrl)
-                print("♻️ 已删除临时文件: \(tempCoverUrl), \(tempVideoUrl)")
-            } catch {
-                // Debug
-                print("⚠️ 删除临时文件失败: \(error)")
+            // 将回调式的闭包转换为 async/await, 并调用 LivePhotoHelper 保存实况图片
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                let livePhotoHelper = LivePhotoHelper()
+                livePhotoHelper.saveLivePhoto(tempCoverUrl, videoUrl: tempVideoUrl) { success, error in
+                    if success {
+                        continuation.resume()
+                    } else {
+                        continuation.resume(throwing: error ?? NSError(domain: "LivePhoto", code: -1,
+                                                               userInfo: [NSLocalizedDescriptionKey: "未知错误"]))
+                    }
+                }
             }
+            
+            isDownloading = false
+            feedbackMessage = "【\(currentLine) / \(totalLines)】实况图片保存成功（\(currentIndex) / \(totalCount)）"
+            isError = false
+            isWarning = false
+        } catch {
+            feedbackMessage = "【\(currentLine) / \(totalLines)】实况图片保存失败: \(error.localizedDescription)（\(currentIndex) / \(totalCount)）"
+            isError = true
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
         }
     }
     
