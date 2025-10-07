@@ -9,12 +9,15 @@
 import SwiftUI
 import Photos
 
+// 客户端行为: 读取分享链接 -> 请求服务端解析资源链接 -> 下载资源 -> 保存至相册
+// 如果要上线新的下载器, 只需在这里添加新的 case 即可, 区分不同下载器的逻辑都放在了服务端
 enum ImageDownloaderType: String, CaseIterable {
     case xhsImg = "小红书图片下载器"
     case xhsLiveImg = "小红书实况图片下载器"
     case xhsVid = "小红书视频下载器"
     case mysImg = "米游社图片下载器"
     case wbImg = "微博图片下载器"
+    case pImg = "Pixiv 图片下载器"
 }
 
 struct ContentView: View {
@@ -564,8 +567,8 @@ struct ContentView: View {
         }
         
         // 根据下载器类型处理不同的数据格式
-        if selectedDownloader == .xhsLiveImg {
-            //『小红书实况图片下载器』返回对象数组
+        if selectedDownloader == .xhsLiveImg { // 当前「实况图片下载器」只有小红书的这一个
+            //「实况图片下载器」返回对象数组, 因为每个「实况图片」包含封面和视频两个部分
             guard let mediaArray = mediaUrls as? [[String: Any?]] else {
                 throw URLError(.cannotParseResponse)
             }
@@ -578,7 +581,7 @@ struct ContentView: View {
                 return (cover, video)
             }
         } else {
-            // 其他下载器返回字符串数组
+            // 一般的下载器返回字符串数组
             guard let mediaArray = mediaUrls as? [String] else {
                 throw URLError(.cannotParseResponse)
             }
