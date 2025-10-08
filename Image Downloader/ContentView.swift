@@ -9,7 +9,7 @@
 import SwiftUI
 import Photos
 
-// 客户端行为: 读取分享链接 -> 请求服务端解析资源链接 -> 下载资源 -> 保存至相册
+// 客户端行为: 读取分享链接 -> 请求服务端解析并提取资源链接 -> 下载资源 -> 保存至相册
 // 如果要上线新的下载器, 只需在这里添加新的 case 即可, 区分不同下载器的逻辑都放在了服务端
 enum ImageDownloaderType: String, CaseIterable {
     case xhsImg = "小红书图片下载器"
@@ -251,6 +251,11 @@ struct ContentView: View {
         line = 0
         for url in urls {
             line += 1
+
+            isDownloading = true
+            feedbackMessage = "【\(line) / \(urls.count)】处理中..."
+            isError = false
+            isWarning = false
             
             // 发起网络请求
             do {
@@ -323,6 +328,7 @@ struct ContentView: View {
                         } catch {
                             feedbackMessage = "【\(line) / \(urls.count)】实况图片下载失败: \(error.localizedDescription)（\(index + 1) / \(mediaUrls.count)）"
                             isError = true
+                            return
                         }
                     } else {
                         // 将 Unicode 编码 \u002F 替换为 /
@@ -366,13 +372,15 @@ struct ContentView: View {
                         } catch {
                             feedbackMessage = "【\(line) / \(urls.count)】图片或视频下载失败: \(error.localizedDescription)（\(index + 1) / \(mediaUrls.count)）"
                             isError = true
+                            return
                         }
                     }
                 }
                 
             } catch {
-                feedbackMessage = error.localizedDescription.isEmpty ? "未知错误" : error.localizedDescription
+                feedbackMessage = "【\(line) / \(urls.count)】" + (error.localizedDescription.isEmpty ? "未知错误" : error.localizedDescription)
                 isError = true
+                return
             }
         }
     }
@@ -382,6 +390,7 @@ struct ContentView: View {
         guard let image = UIImage(data: imageData) else {
             feedbackMessage = "【\(currentLine) / \(totalLines)】图片数据无效（\(currentIndex) / \(totalCount)）"
             isError = true
+            await pauseBriefly()
             return
         }
         do {
@@ -395,7 +404,7 @@ struct ContentView: View {
         } catch {
             feedbackMessage = "【\(currentLine) / \(totalLines)】图片保存失败: \(error.localizedDescription)（\(currentIndex) / \(totalCount)）"
             isError = true
-            try? await Task.sleep(nanoseconds: 1_000_000_000)
+            await pauseBriefly()
         }
     }
     
@@ -408,6 +417,7 @@ struct ContentView: View {
         } catch {
             feedbackMessage = "【\(currentLine) / \(totalLines)】写入临时视频文件失败: \(error.localizedDescription)（\(currentIndex) / \(totalCount)）"
             isError = true
+            await pauseBriefly()
             return
         }
         
@@ -432,7 +442,7 @@ struct ContentView: View {
         } catch {
             feedbackMessage = "【\(currentLine) / \(totalLines)】视频保存失败: \(error.localizedDescription)（\(currentIndex) / \(totalCount)）"
             isError = true
-            try? await Task.sleep(nanoseconds: 1_000_000_000)
+            await pauseBriefly()
         }
     }
     
@@ -450,6 +460,7 @@ struct ContentView: View {
         } catch {
             feedbackMessage = "【\(currentLine) / \(totalLines)】写入临时封面文件失败: \(error.localizedDescription)（\(currentIndex) / \(totalCount)）"
             isError = true
+            await pauseBriefly()
             return
         }
         
@@ -459,6 +470,7 @@ struct ContentView: View {
         } catch {
             feedbackMessage = "【\(currentLine) / \(totalLines)】写入临时视频文件失败: \(error.localizedDescription)（\(currentIndex) / \(totalCount)）"
             isError = true
+            await pauseBriefly()
             return
         }
         
@@ -494,7 +506,7 @@ struct ContentView: View {
         } catch {
             feedbackMessage = "【\(currentLine) / \(totalLines)】实况图片保存失败: \(error.localizedDescription)（\(currentIndex) / \(totalCount)）"
             isError = true
-            try? await Task.sleep(nanoseconds: 1_000_000_000)
+            await pauseBriefly()
         }
     }
     
