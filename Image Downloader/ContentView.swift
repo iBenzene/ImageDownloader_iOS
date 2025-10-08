@@ -550,7 +550,7 @@ struct ContentView: View {
         // 创建网络请求
         var request = URLRequest(url: requestUrl)
         request.setValue(userAgent, forHTTPHeaderField: "User-Agent")
-        request.timeoutInterval = 30
+        request.timeoutInterval = 300
 
         print("🔗 向 \(requestUrl) 发起解析请求")
 
