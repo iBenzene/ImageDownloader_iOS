@@ -11,6 +11,7 @@ import SwiftUI
 struct SettingsView: View {
     @AppStorage("backendUrl") private var backendUrl: String = ""
     @AppStorage("backendToken") private var backendToken: String = ""
+    @AppStorage("saveLinksOnly") private var saveLinksOnly: Bool = false
 
     var body: some View {
         List {
@@ -20,6 +21,10 @@ struct SettingsView: View {
 
             Section(header: Text("后端令牌").textCase(nil), footer: Text("令牌必须与后端中的设置保持一致。")) {
                 TextField("请输入后端令牌", text: $backendToken)
+            }
+            
+            Section(header: Text("收藏模式").textCase(nil), footer: Text("开启后，主页的「下载」按钮将被替换为「收藏」，仅提取并保存有效链接而不下载资源。")) {
+                Toggle("仅保存链接", isOn: $saveLinksOnly)
             }
         }
         .navigationBarTitle("设置", displayMode: .inline)

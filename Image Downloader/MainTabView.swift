@@ -13,14 +13,17 @@ struct MainTabView: View {
     
     enum Tab: String, CaseIterable {
         case home = "主页"
-        case history = "历史记录"
+        case savedLinks = "已收藏"
+        case settings = "设置"
         
         var icon: String {
             switch self {
             case .home:
                 return "house"
-            case .history:
-                return "clock.arrow.circlepath"
+            case .savedLinks:
+                return "archivebox"
+            case .settings:
+                return "gearshape"
             }
         }
         
@@ -28,8 +31,10 @@ struct MainTabView: View {
             switch self {
             case .home:
                 return "house.fill"
-            case .history:
-                return "clock.arrow.circlepath"
+            case .savedLinks:
+                return "archivebox.fill"
+            case .settings:
+                return "gearshape.fill"
             }
         }
     }
@@ -38,23 +43,31 @@ struct MainTabView: View {
         TabView(selection: $selectedTab) {
             ContentView()
                 .tabItem {
-                    Label {
-                        Text(Tab.home.rawValue)
-                    } icon: {
-                        Image(systemName: selectedTab == .home ? Tab.home.selectedIcon : Tab.home.icon)
-                    }
+                    Image(systemName: selectedTab == .home ? Tab.home.selectedIcon : Tab.home.icon)
+                        .environment(\.symbolVariants, .none)
+                    Text(Tab.home.rawValue)
                 }
                 .tag(Tab.home)
             
-            HistoryView()
-                .tabItem {
-                    Label {
-                        Text(Tab.history.rawValue)
-                    } icon: {
-                        Image(systemName: selectedTab == .history ? Tab.history.selectedIcon : Tab.history.icon)
-                    }
-                }
-                .tag(Tab.history)
+            NavigationView {
+                SavedLinksView()
+            }
+            .tabItem {
+                Image(systemName: selectedTab == .savedLinks ? Tab.savedLinks.selectedIcon : Tab.savedLinks.icon)
+                    .environment(\.symbolVariants, .none)
+                Text(Tab.savedLinks.rawValue)
+            }
+            .tag(Tab.savedLinks)
+            
+            NavigationView {
+                SettingsView()
+            }
+            .tabItem {
+                Image(systemName: selectedTab == .settings ? Tab.settings.selectedIcon : Tab.settings.icon)
+                    .environment(\.symbolVariants, .none)
+                Text(Tab.settings.rawValue)
+            }
+            .tag(Tab.settings)
         }
         .tint(Color("AccentColor"))
     }

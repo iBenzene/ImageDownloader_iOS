@@ -11,6 +11,9 @@
 		44520B6E2F363AEB00A7264A /* HistoryManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44520B6B2F363AEB00A7264A /* HistoryManager.swift */; };
 		44520B6F2F363AEB00A7264A /* MainTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44520B6C2F363AEB00A7264A /* MainTabView.swift */; };
 		44520B702F363AEB00A7264A /* HistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44520B6D2F363AEB00A7264A /* HistoryView.swift */; };
+		44520B712F368F0000A7264A /* SavedLinksManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44520B722F368F0000A7264A /* SavedLinksManager.swift */; };
+		44520B722F368DE800A7264A /* DownloadManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44520B712F368DE800A7264A /* DownloadManager.swift */; };
+		44520B732F368F0000A7264A /* SavedLinksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44520B742F368F0000A7264A /* SavedLinksView.swift */; };
 		448856E92B3AB4B9007B55EC /* Image_DownloaderApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 448856E82B3AB4B9007B55EC /* Image_DownloaderApp.swift */; };
 		448856EB2B3AB4B9007B55EC /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 448856EA2B3AB4B9007B55EC /* ContentView.swift */; };
 		448856ED2B3AB4BA007B55EC /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 448856EC2B3AB4BA007B55EC /* Assets.xcassets */; };
@@ -46,6 +49,9 @@
 		44520B6B2F363AEB00A7264A /* HistoryManager.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = HistoryManager.swift; sourceTree = "<group>"; };
 		44520B6C2F363AEB00A7264A /* MainTabView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = MainTabView.swift; sourceTree = "<group>"; };
 		44520B6D2F363AEB00A7264A /* HistoryView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = HistoryView.swift; sourceTree = "<group>"; };
+		44520B712F368DE800A7264A /* DownloadManager.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = DownloadManager.swift; sourceTree = "<group>"; };
+		44520B722F368F0000A7264A /* SavedLinksManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavedLinksManager.swift; sourceTree = "<group>"; };
+		44520B742F368F0000A7264A /* SavedLinksView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavedLinksView.swift; sourceTree = "<group>"; };
 		448856E52B3AB4B9007B55EC /* Image Downloader.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Image Downloader.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		448856E82B3AB4B9007B55EC /* Image_DownloaderApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Image_DownloaderApp.swift; sourceTree = "<group>"; };
 		448856EA2B3AB4B9007B55EC /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
@@ -113,9 +119,12 @@
 		448856E72B3AB4B9007B55EC /* Image Downloader */ = {
 			isa = PBXGroup;
 			children = (
+				44520B712F368DE800A7264A /* DownloadManager.swift */,
 				44520B6B2F363AEB00A7264A /* HistoryManager.swift */,
 				44520B6D2F363AEB00A7264A /* HistoryView.swift */,
 				44520B6C2F363AEB00A7264A /* MainTabView.swift */,
+				44520B722F368F0000A7264A /* SavedLinksManager.swift */,
+				44520B742F368F0000A7264A /* SavedLinksView.swift */,
 				44FA6A892D32B1BB00D55A8E /* LivePhotoHelper.h */,
 				44FA6A8A2D32B1BB00D55A8E /* LivePhotoHelper.m */,
 				448856E82B3AB4B9007B55EC /* Image_DownloaderApp.swift */,
@@ -290,7 +299,10 @@
 			buildActionMask = 2147483647;
 			files = (
 				44520B6E2F363AEB00A7264A /* HistoryManager.swift in Sources */,
+				44520B722F368DE800A7264A /* DownloadManager.swift in Sources */,
 				44520B702F363AEB00A7264A /* HistoryView.swift in Sources */,
+				44520B712F368F0000A7264A /* SavedLinksManager.swift in Sources */,
+				44520B732F368F0000A7264A /* SavedLinksView.swift in Sources */,
 				44FC11502C1B81DC00883582 /* SettingsView.swift in Sources */,
 				448856EB2B3AB4B9007B55EC /* ContentView.swift in Sources */,
 				44FA6A8B2D32B1BB00D55A8E /* LivePhotoHelper.m in Sources */,

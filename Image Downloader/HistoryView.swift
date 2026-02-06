@@ -13,50 +13,48 @@ struct HistoryView: View {
     @State private var showClearConfirmation = false
     
     var body: some View {
-        NavigationView {
-            ZStack {
-                // Background gradient for a modern look
-                LinearGradient(
-                    colors: [Color(.systemBackground), Color(.systemGray6)],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .ignoresSafeArea()
-                
-                if historyManager.items.isEmpty {
-                    // Empty state
-                    emptyStateView
-                } else {
-                    // History list
-                    historyListView
-                }
-            }
-            .navigationTitle("历史记录")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    if !historyManager.items.isEmpty {
-                        Button(action: {
-                            showClearConfirmation = true
-                        }) {
-                            Image(systemName: "trash")
-                                .foregroundColor(.red)
-                        }
-                    }
-                }
-            }
-            .alert("清空历史记录", isPresented: $showClearConfirmation) {
-                Button("取消", role: .cancel) {}
-                Button("清空", role: .destructive) {
-                    withAnimation(.easeInOut(duration: 0.3)) {
-                        historyManager.clearAll()
-                    }
-                }
-            } message: {
-                Text("确定要清空所有历史记录吗？此操作无法撤销。")
+        ZStack {
+            // Background gradient for a modern look
+            LinearGradient(
+                colors: [Color(.systemBackground), Color(.systemGray6)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea()
+            
+            if historyManager.items.isEmpty {
+                // Empty state
+                emptyStateView
+            } else {
+                // History list
+                historyListView
             }
         }
-        .navigationViewStyle(.stack)
+        .navigationTitle("下载记录")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                if !historyManager.items.isEmpty {
+                    Button(action: {
+                        showClearConfirmation = true
+                    }) {
+                        Image(systemName: "trash")
+                            .foregroundColor(.red)
+                            .padding(.trailing, 20)
+                    }
+                }
+            }
+        }
+        .alert("清空下载记录", isPresented: $showClearConfirmation) {
+            Button("取消", role: .cancel) {}
+            Button("清空", role: .destructive) {
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    historyManager.clearAll()
+                }
+            }
+        } message: {
+            Text("确定要清空所有下载记录吗？此操作无法撤销。")
+        }
     }
     
     // Empty State View
@@ -72,7 +70,7 @@ struct HistoryView: View {
                     )
                 )
             
-            Text("暂无历史记录")
+            Text("暂无下载记录")
                 .font(.title2)
                 .fontWeight(.semibold)
                 .foregroundColor(.primary)
@@ -137,16 +135,15 @@ struct HistoryItemRow: View {
                                 .fill(Color("AccentColor").opacity(0.15))
                         )
                     
-                    // Media count
-                    if item.mediaCount > 1 {
-                        HStack(spacing: 2) {
-                            Image(systemName: "photo.stack")
-                                .font(.caption2)
-                            Text("\(item.mediaCount)")
-                                .font(.caption)
-                        }
-                        .foregroundColor(.secondary)
+                    // Content Type & Count
+                    HStack(spacing: 2) {
+                        Image(systemName: typeIconName)
+                            .font(.caption2)
+
+                        Text("\(item.mediaCount)")
+                            .font(.caption)
                     }
+                    .foregroundColor(.secondary)
                     
                     Spacer()
                     
@@ -177,6 +174,17 @@ struct HistoryItemRow: View {
         )
     }
     
+    // Helper to determine icon name
+    private var typeIconName: String {
+        if item.shortDownloaderName.contains("视频") {
+            return "film"
+        } else if item.shortDownloaderName.contains("实况") {
+            return "livephoto"
+        } else {
+            return item.mediaCount > 1 ? "photo.stack" : "photo"
+        }
+    }
+
     // Status Indicator
     private var statusIndicator: some View {
         ZStack {
