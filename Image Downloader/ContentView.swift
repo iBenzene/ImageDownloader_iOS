@@ -266,6 +266,14 @@ struct ContentView: View {
                     feedbackMessage = "【\(line) / \(urls.count)】未提取到图片或视频的链接"
                     isError = true
                     
+                    // Record failure to history
+                    HistoryManager.shared.addRecord(
+                        url: url.absoluteString,
+                        downloaderType: selectedDownloader.rawValue,
+                        isSuccess: false,
+                        mediaCount: 0
+                    )
+                    
                     // Debug: 检查提取的媒体链接
                     print("⚠️ [\(line) / \(urls.count)] 未提取到图片或视频的链接, 原始 URL: \(url)")
                     return
@@ -328,6 +336,14 @@ struct ContentView: View {
                         } catch {
                             feedbackMessage = "【\(line) / \(urls.count)】实况图片下载失败: \(error.localizedDescription)（\(index + 1) / \(mediaUrls.count)）"
                             isError = true
+                            
+                            // Record failure to history
+                            HistoryManager.shared.addRecord(
+                                url: url.absoluteString,
+                                downloaderType: selectedDownloader.rawValue,
+                                isSuccess: false,
+                                mediaCount: index
+                            )
                             return
                         }
                     } else {
@@ -372,14 +388,38 @@ struct ContentView: View {
                         } catch {
                             feedbackMessage = "【\(line) / \(urls.count)】图片或视频下载失败: \(error.localizedDescription)（\(index + 1) / \(mediaUrls.count)）"
                             isError = true
+                            
+                            // Record failure to history
+                            HistoryManager.shared.addRecord(
+                                url: url.absoluteString,
+                                downloaderType: selectedDownloader.rawValue,
+                                isSuccess: false,
+                                mediaCount: index
+                            )
                             return
                         }
                     }
                 }
                 
+                // Record success to history after all media items are downloaded
+                HistoryManager.shared.addRecord(
+                    url: url.absoluteString,
+                    downloaderType: selectedDownloader.rawValue,
+                    isSuccess: true,
+                    mediaCount: mediaUrls.count
+                )
+                
             } catch {
                 feedbackMessage = "【\(line) / \(urls.count)】" + (error.localizedDescription.isEmpty ? "未知错误" : error.localizedDescription)
                 isError = true
+                
+                // Record failure to history
+                HistoryManager.shared.addRecord(
+                    url: url.absoluteString,
+                    downloaderType: selectedDownloader.rawValue,
+                    isSuccess: false,
+                    mediaCount: 0
+                )
                 return
             }
         }
@@ -606,6 +646,13 @@ struct ContentView: View {
 // 预览
 struct ContentView_Previews: PreviewProvider {
     static var previews: some View {
-        ContentView()
+        Group {
+            ContentView()
+                .previewDisplayName("Light Mode")
+            
+            ContentView()
+                .preferredColorScheme(.dark)
+                .previewDisplayName("Dark Mode")
+        }
     }
 }

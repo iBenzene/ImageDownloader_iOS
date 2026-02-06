@@ -195,6 +195,8 @@ private func cleanupWorkDir() {
 // MARK: - 预览
 struct LivePhotoConverterView_Previews: PreviewProvider {
     static var previews: some View {
-        LivePhotoConverterView()
+        NavigationView {
+            LivePhotoConverterView()
+        }
     }
 }

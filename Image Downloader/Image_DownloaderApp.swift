@@ -11,7 +11,7 @@ import SwiftUI
 struct Image_DownloaderApp: App {
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            MainTabView()
         }
     }
 }
