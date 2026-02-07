@@ -11,6 +11,7 @@ import SwiftUI
 struct HistoryView: View {
     @ObservedObject private var historyManager = HistoryManager.shared
     @State private var showClearConfirmation = false
+    @State private var isSyncing = false
     
     var body: some View {
         ZStack {
@@ -22,25 +23,52 @@ struct HistoryView: View {
             )
             .ignoresSafeArea()
             
-            if historyManager.items.isEmpty {
+            if historyManager.visibleItems.isEmpty {
                 // Empty state
                 emptyStateView
             } else {
                 // History list
                 historyListView
             }
+            
+            if isSyncing {
+                VStack {
+                    Spacer()
+                    HStack {
+                        ProgressView()
+                            .padding(.trailing, 5)
+                        Text("同步中...")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    .padding()
+                    .background(Material.thin)
+                    .cornerRadius(20)
+                    .padding(.bottom, 20)
+                }
+            }
         }
         .navigationTitle("下载记录")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
-                if !historyManager.items.isEmpty {
+                HStack(spacing: 0) {
+                    // Sync Button
                     Button(action: {
-                        showClearConfirmation = true
+                        triggerSync()
                     }) {
-                        Image(systemName: "trash")
-                            .foregroundColor(.red)
-                            .padding(.trailing, 20)
+                        Image(systemName: "arrow.triangle.2.circlepath")
+                            .foregroundColor(.accentColor)
+                    }
+                    .padding(.trailing, 16)
+
+                    if !historyManager.visibleItems.isEmpty {
+                        Button(action: {
+                            showClearConfirmation = true
+                        }) {
+                            Image(systemName: "trash")
+                                .foregroundColor(.red)
+                        }
                     }
                 }
             }
@@ -51,9 +79,22 @@ struct HistoryView: View {
                 withAnimation(.easeInOut(duration: 0.3)) {
                     historyManager.clearAll()
                 }
+                triggerSync()
             }
         } message: {
             Text("确定要清空所有下载记录吗？此操作无法撤销。")
+        }
+        .task {
+            // Auto sync when view appears
+            await HistorySyncManager.shared.sync()
+        }
+    }
+    
+    private func triggerSync() {
+        Task {
+            isSyncing = true
+            await HistorySyncManager.shared.sync()
+            isSyncing = false
         }
     }
     
@@ -86,7 +127,7 @@ struct HistoryView: View {
     // History List View
     private var historyListView: some View {
         List {
-            ForEach(historyManager.items) { item in
+            ForEach(historyManager.visibleItems) { item in
                 HistoryItemRow(item: item)
                     .listRowBackground(Color.clear)
                     .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
@@ -95,10 +136,14 @@ struct HistoryView: View {
                 withAnimation(.easeInOut(duration: 0.25)) {
                     historyManager.deleteItems(at: offsets)
                 }
+                triggerSync()
             }
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
+        .refreshable {
+            await HistorySyncManager.shared.sync()
+        }
     }
 }
 

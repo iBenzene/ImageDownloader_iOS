@@ -18,10 +18,15 @@ enum SavedLinkStatus: String, Codable, Equatable {
 // Saved Link Item Model
 struct SavedLinkItem: Identifiable, Codable, Equatable {
     let id: UUID
-    let url: String              // The saved URL
-    let timestamp: Date          // When the link was saved
-    let downloaderType: String   // The downloader type used (e.g. "小红书图片下载器")
-    var status: SavedLinkStatus  // Download status
+    let url: String
+    let timestamp: Date
+    let downloaderType: String
+    var status: SavedLinkStatus
+    
+    // Sync Metadata
+    var updatedAt: Date
+    var isDeleted: Bool
+    var isDirty: Bool
     
     init(url: String, downloaderType: String, status: SavedLinkStatus = .none) {
         self.id = UUID()
@@ -29,9 +34,25 @@ struct SavedLinkItem: Identifiable, Codable, Equatable {
         self.timestamp = Date()
         self.downloaderType = downloaderType
         self.status = status
+        
+        self.updatedAt = Date()
+        self.isDeleted = false
+        self.isDirty = true
     }
     
-    // Custom decoding to handle legacy data
+    // Internal init for merging/syncing
+    init(id: UUID, url: String, timestamp: Date, downloaderType: String, status: SavedLinkStatus, updatedAt: Date, isDeleted: Bool, isDirty: Bool) {
+        self.id = id
+        self.url = url
+        self.timestamp = timestamp
+        self.downloaderType = downloaderType
+        self.status = status
+        self.updatedAt = updatedAt
+        self.isDeleted = isDeleted
+        self.isDirty = isDirty
+    }
+    
+    // Custom decoding for migration
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.id = try container.decode(UUID.self, forKey: .id)
@@ -39,6 +60,11 @@ struct SavedLinkItem: Identifiable, Codable, Equatable {
         self.timestamp = try container.decode(Date.self, forKey: .timestamp)
         self.downloaderType = try container.decodeIfPresent(String.self, forKey: .downloaderType) ?? "小红书图片下载器"
         self.status = try container.decodeIfPresent(SavedLinkStatus.self, forKey: .status) ?? .none
+        
+        // Migration: New sync fields
+        self.updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt) ?? timestamp
+        self.isDeleted = try container.decodeIfPresent(Bool.self, forKey: .isDeleted) ?? false
+        self.isDirty = try container.decodeIfPresent(Bool.self, forKey: .isDirty) ?? true
     }
 }
 
@@ -48,27 +74,32 @@ class SavedLinksManager: ObservableObject {
     
     @Published private(set) var items: [SavedLinkItem] = []
     
+    var visibleItems: [SavedLinkItem] {
+        items.filter { !$0.isDeleted }
+    }
+    
     private let storageKey = "savedLinks"
-    private let maxItems = 500  // Maximum number of saved links to keep
+    private let lastSyncedKey = "savedLinksLastSyncedAt"
+    private let maxItems = 500
+    
+    var lastSyncedAt: Date? {
+        get {
+            UserDefaults.standard.object(forKey: lastSyncedKey) as? Date
+        }
+        set {
+            UserDefaults.standard.set(newValue, forKey: lastSyncedKey)
+        }
+    }
     
     private init() {
         loadItems()
     }
     
-    // Public Methods
-    
     // Add a new saved link
     func addLink(url: String, downloaderType: String) {
         let item = SavedLinkItem(url: url, downloaderType: downloaderType)
-        
-        // Insert at the beginning (newest first)
         items.insert(item, at: 0)
-        
-        // Trim if exceeds max items
-        if items.count > maxItems {
-            items = Array(items.prefix(maxItems))
-        }
-        
+        items = Array(items.prefix(maxItems))
         saveItems()
     }
     
@@ -78,44 +109,92 @@ class SavedLinksManager: ObservableObject {
             let item = SavedLinkItem(url: url, downloaderType: downloaderType)
             items.insert(item, at: 0)
         }
-        
-        // Trim if exceeds max items
-        if items.count > maxItems {
-            items = Array(items.prefix(maxItems))
-        }
-        
+        items = Array(items.prefix(maxItems))
         saveItems()
     }
     
     // Update status for a specific item
     func updateStatus(for item: SavedLinkItem, newStatus: SavedLinkStatus) {
         if let index = items.firstIndex(where: { $0.id == item.id }) {
-            var updatedItem = items[index]
-            updatedItem.status = newStatus
-            items[index] = updatedItem
+            items[index].status = newStatus
+            items[index].updatedAt = Date()
+            items[index].isDirty = true
             saveItems()
         }
     }
     
-    // Delete a single saved link
+    // Soft delete a single saved link
     func deleteItem(_ item: SavedLinkItem) {
-        items.removeAll { $0.id == item.id }
-        saveItems()
+        if let index = items.firstIndex(where: { $0.id == item.id }) {
+            items[index].isDeleted = true
+            items[index].updatedAt = Date()
+            items[index].isDirty = true
+            saveItems()
+        }
     }
     
-    // Delete items at specific indices
+    // Soft delete items at specific indices (from visibleItems)
     func deleteItems(at offsets: IndexSet) {
-        items.remove(atOffsets: offsets)
-        saveItems()
+        let itemsToDelete = offsets.map { visibleItems[$0] }
+        for item in itemsToDelete {
+            deleteItem(item)
+        }
     }
     
-    // Clear all saved links
+    // Soft delete all items
     func clearAll() {
-        items.removeAll()
+        for index in items.indices {
+            if !items[index].isDeleted {
+                items[index].isDeleted = true
+                items[index].updatedAt = Date()
+                items[index].isDirty = true
+            }
+        }
         saveItems()
     }
     
-    // Private Methods
+    // Fetch dirty records for sync
+    func fetchDirtyRecords() -> [SavedLinkItem] {
+        return items.filter { $0.isDirty }
+    }
+    
+    // Mark records as synced
+    func markAsSynced(ids: Set<UUID>) {
+        for index in items.indices {
+            if ids.contains(items[index].id) {
+                items[index].isDirty = false
+            }
+        }
+        saveItems()
+    }
+    
+    // Merge remote records
+    func merge(remoteRecords: [SavedLinkItem]) {
+        var needsSave = false
+        
+        for remote in remoteRecords {
+            if let index = items.firstIndex(where: { $0.id == remote.id }) {
+                let local = items[index]
+                if remote.updatedAt >= local.updatedAt {
+                    var merged = remote
+                    merged.isDirty = false
+                    items[index] = merged
+                    needsSave = true
+                }
+            } else {
+                var newRecord = remote
+                newRecord.isDirty = false
+                items.append(newRecord)
+                needsSave = true
+            }
+        }
+        
+        items.sort { $0.timestamp > $1.timestamp }
+        
+        if needsSave {
+            saveItems()
+        }
+    }
     
     private func loadItems() {
         guard let data = UserDefaults.standard.data(forKey: storageKey) else {
@@ -140,6 +219,7 @@ class SavedLinksManager: ObservableObject {
         }
     }
 }
+
 
 // Date Formatting Extension & Helpers
 extension SavedLinkItem {

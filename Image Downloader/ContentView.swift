@@ -19,6 +19,9 @@ struct ContentView: View {
     @State private var showingLivePhotoConverter = false
     @State private var showingHistory = false
     
+    @State private var showingDuplicateAlert = false
+    @State private var pendingSavedLinks: [String] = []
+    
     @AppStorage("saveLinksOnly") private var saveLinksOnly: Bool = false
 
     @State private var selectedDownloader: ImageDownloaderType = .xhsImg
@@ -180,6 +183,18 @@ struct ContentView: View {
             }
             .padding()
             .navigationBarHidden(true)
+            .alert("重复链接提醒", isPresented: $showingDuplicateAlert) {
+                Button("取消", role: .cancel) {
+                    pendingSavedLinks = []
+                    feedbackMessage = "已取消收藏"
+                    isWarning = true
+                }
+                Button("继续") {
+                    saveLinks(pendingSavedLinks)
+                }
+            } message: {
+                Text("检测到收藏列表中已存在部分链接，是否继续收藏？")
+            }
         }
     }
     
@@ -326,15 +341,37 @@ struct ContentView: View {
             return
         }
         
+        // Check for duplicates
+        let existingLinks = SavedLinksManager.shared.items.map { $0.url }
+        let duplicates = savedUrls.filter { url in
+            existingLinks.contains(url)
+        }
+        
+        if !duplicates.isEmpty {
+            // Found duplicates, ask user what to do
+            pendingSavedLinks = savedUrls
+            showingDuplicateAlert = true
+            return
+        }
+        
+        // No duplicates, save directly
+        saveLinks(savedUrls)
+    }
+    
+    // Helper to actually save links
+    func saveLinks(_ urls: [String]) {
         // Save all extracted URLs
-        SavedLinksManager.shared.addLinks(urls: savedUrls, downloaderType: selectedDownloader.rawValue)
+        SavedLinksManager.shared.addLinks(urls: urls, downloaderType: selectedDownloader.rawValue)
         
         // Clear input and show success message
         linkInput = ""
-        feedbackMessage = "已保存 \(savedUrls.count) 个链接"
+        feedbackMessage = "已保存 \(urls.count) 个链接"
         isError = false
         isWarning = false
         isDownloading = false
+        
+        // Clear pending links
+        pendingSavedLinks = []
     }
 }
 

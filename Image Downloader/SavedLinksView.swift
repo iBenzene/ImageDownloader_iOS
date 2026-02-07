@@ -27,7 +27,7 @@ struct SavedLinksView: View {
             )
             .ignoresSafeArea()
             
-            if savedLinksManager.items.isEmpty {
+            if savedLinksManager.visibleItems.isEmpty {
                 // Empty state
                 emptyStateView
             } else {
@@ -40,7 +40,7 @@ struct SavedLinksView: View {
         .toolbar {
             // Left: Download All Button
             ToolbarItem(placement: .navigationBarLeading) {
-                if !savedLinksManager.items.isEmpty {
+                if !savedLinksManager.visibleItems.isEmpty {
                     if isBatchDownloading {
                         HStack(spacing: 6) {
                             ProgressView()
@@ -58,15 +58,15 @@ struct SavedLinksView: View {
                                 .padding(.leading, 18)
                         }
                         // Only enable if there are items that need downloading
-                        .disabled(savedLinksManager.items.allSatisfy { $0.status == .success })
-                        .opacity(savedLinksManager.items.allSatisfy { $0.status == .success } ? 0.5 : 1.0)
+                        .disabled(savedLinksManager.visibleItems.allSatisfy { $0.status == .success })
+                        .opacity(savedLinksManager.visibleItems.allSatisfy { $0.status == .success } ? 0.5 : 1.0)
                     }
                 }
             }
             
             // Right: Clear All Button
             ToolbarItem(placement: .navigationBarTrailing) {
-                if !savedLinksManager.items.isEmpty {
+                if !savedLinksManager.visibleItems.isEmpty {
                     Button(action: {
                         showClearConfirmation = true
                     }) {
@@ -76,6 +76,20 @@ struct SavedLinksView: View {
                     }
                     .disabled(isBatchDownloading)
                     .opacity(isBatchDownloading ? 0.5 : 1.0)
+                }
+            }
+            
+            // Right: Sync Button
+            ToolbarItem(placement: .navigationBarTrailing) {
+                if !savedLinksManager.visibleItems.isEmpty {
+                    Button(action: {
+                        Task { await SavedLinksSyncManager.shared.sync() }
+                    }) {
+                        Image(systemName: "arrow.triangle.2.circlepath")
+                            .foregroundColor(Color("AccentColor"))
+                            .padding(.trailing, 8)
+                    }
+                    .disabled(isBatchDownloading)
                 }
             }
         }
@@ -89,11 +103,17 @@ struct SavedLinksView: View {
         } message: {
             Text("确定要清空所有已收藏链接吗？此操作无法撤销。")
         }
+        .task {
+            await SavedLinksSyncManager.shared.sync()
+        }
+        .refreshable {
+            await SavedLinksSyncManager.shared.sync()
+        }
     }
     
     private func downloadAll() {
         // Filter items that are not successful (none or failure)
-        let itemsToDownload = savedLinksManager.items.filter { $0.status != .success }
+        let itemsToDownload = savedLinksManager.visibleItems.filter { $0.status != .success }
         
         guard !itemsToDownload.isEmpty else { return }
         
@@ -184,7 +204,7 @@ struct SavedLinksView: View {
     // Saved Links List View
     private var savedLinksListView: some View {
         List {
-            ForEach(savedLinksManager.items) { item in
+            ForEach(savedLinksManager.visibleItems) { item in
                 SavedLinkItemRow(item: item)
                     .listRowBackground(Color.clear)
                     .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))

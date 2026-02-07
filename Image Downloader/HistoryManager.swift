@@ -17,6 +17,11 @@ struct HistoryItem: Identifiable, Codable, Equatable {
     let isSuccess: Bool          // Whether the download was successful
     let mediaCount: Int          // Number of media items downloaded
     
+    // Sync Metadata
+    var updatedAt: Date          // Last modification timestamp
+    var isDeleted: Bool          // Soft delete flag
+    var isDirty: Bool            // Local flag: needs sync
+    
     init(url: String, downloaderType: String, isSuccess: Bool, mediaCount: Int = 1) {
         self.id = UUID()
         self.url = url
@@ -24,6 +29,39 @@ struct HistoryItem: Identifiable, Codable, Equatable {
         self.timestamp = Date()
         self.isSuccess = isSuccess
         self.mediaCount = mediaCount
+        
+        self.updatedAt = Date()
+        self.isDeleted = false
+        self.isDirty = true
+    }
+    
+    // Internal init for merging/syncing
+    init(id: UUID, url: String, downloaderType: String, timestamp: Date, isSuccess: Bool, mediaCount: Int, updatedAt: Date, isDeleted: Bool, isDirty: Bool) {
+        self.id = id
+        self.url = url
+        self.downloaderType = downloaderType
+        self.timestamp = timestamp
+        self.isSuccess = isSuccess
+        self.mediaCount = mediaCount
+        self.updatedAt = updatedAt
+        self.isDeleted = isDeleted
+        self.isDirty = isDirty
+    }
+    
+    // Custom decoding for migration
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        url = try container.decode(String.self, forKey: .url)
+        downloaderType = try container.decode(String.self, forKey: .downloaderType)
+        timestamp = try container.decode(Date.self, forKey: .timestamp)
+        isSuccess = try container.decode(Bool.self, forKey: .isSuccess)
+        mediaCount = try container.decode(Int.self, forKey: .mediaCount)
+        
+        // Migration: New fields
+        updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt) ?? timestamp
+        isDeleted = try container.decodeIfPresent(Bool.self, forKey: .isDeleted) ?? false
+        isDirty = try container.decodeIfPresent(Bool.self, forKey: .isDirty) ?? true
     }
 }
 
@@ -33,14 +71,27 @@ class HistoryManager: ObservableObject {
     
     @Published private(set) var items: [HistoryItem] = []
     
+    // Public accesor for UI to see only non-deleted items
+    var visibleItems: [HistoryItem] {
+        items.filter { !$0.isDeleted }
+    }
+    
     private let storageKey = "downloadHistory"
-    private let maxItems = 500  // Maximum number of history items to keep
+    private let lastSyncedKey = "historyLastSyncedAt"
+    private let maxItems = 500
+    
+    var lastSyncedAt: Date? {
+        get {
+            UserDefaults.standard.object(forKey: lastSyncedKey) as? Date
+        }
+        set {
+            UserDefaults.standard.set(newValue, forKey: lastSyncedKey)
+        }
+    }
     
     private init() {
         loadItems()
     }
-    
-    // Public Methods
     
     // Add a new history record
     func addRecord(url: String, downloaderType: String, isSuccess: Bool, mediaCount: Int = 1) {
@@ -55,32 +106,95 @@ class HistoryManager: ObservableObject {
         items.insert(item, at: 0)
         
         // Trim if exceeds max items
-        if items.count > maxItems {
-            items = Array(items.prefix(maxItems))
-        }
+        items = Array(items.prefix(maxItems))
         
         saveItems()
     }
     
-    // Delete a single history item
+    // Soft delete a single history item
     func deleteItem(_ item: HistoryItem) {
-        items.removeAll { $0.id == item.id }
-        saveItems()
+        if let index = items.firstIndex(where: { $0.id == item.id }) {
+            var updatedItem = items[index]
+            updatedItem.isDeleted = true
+            updatedItem.updatedAt = Date()
+            updatedItem.isDirty = true
+            items[index] = updatedItem
+            saveItems()
+        }
     }
     
-    // Delete items at specific indices
+    // Soft delete items at specific indices (from visibleItems)
     func deleteItems(at offsets: IndexSet) {
-        items.remove(atOffsets: offsets)
-        saveItems()
+        let itemsToDelete = offsets.map { visibleItems[$0] }
+        
+        for item in itemsToDelete {
+            deleteItem(item)
+        }
     }
     
-    // Clear all history
+    // Clear all history (Soft delete all)
     func clearAll() {
-        items.removeAll()
+        for index in items.indices {
+            if !items[index].isDeleted {
+                items[index].isDeleted = true
+                items[index].updatedAt = Date()
+                items[index].isDirty = true
+            }
+        }
         saveItems()
     }
     
-    // Private Methods
+    // Hard delete (for internal cleanup if needed)
+    func hardDelete(id: UUID) {
+        items.removeAll { $0.id == id }
+        saveItems()
+    }
+    
+    // Fetch dirty records for sync
+    func fetchDirtyRecords() -> [HistoryItem] {
+        return items.filter { $0.isDirty }
+    }
+    
+    // Mark records as synced (not dirty)
+    func markAsSynced(ids: Set<UUID>) {
+        for index in items.indices {
+            if ids.contains(items[index].id) {
+                items[index].isDirty = false
+            }
+        }
+        saveItems()
+    }
+    
+    // Merge remote records
+    func merge(remoteRecords: [HistoryItem]) {
+        var needsSave = false
+        
+        for remote in remoteRecords {
+            if let index = items.firstIndex(where: { $0.id == remote.id }) {
+                // Conflict resolution: Remote wins if newer (or backend logic implies remote is truth)
+                let local = items[index]
+                if remote.updatedAt >= local.updatedAt {
+                    var merged = remote
+                    merged.isDirty = false
+                    items[index] = merged
+                    needsSave = true
+                }
+            } else {
+                // Insert new record
+                var newRecord = remote
+                newRecord.isDirty = false
+                items.append(newRecord)
+                needsSave = true
+            }
+        }
+        
+        // Re-sort by timestamp descending
+        items.sort { $0.timestamp > $1.timestamp }
+        
+        if needsSave {
+            saveItems()
+        }
+    }
     
     private func loadItems() {
         guard let data = UserDefaults.standard.data(forKey: storageKey) else {
