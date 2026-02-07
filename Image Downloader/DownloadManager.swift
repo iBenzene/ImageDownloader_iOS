@@ -65,9 +65,12 @@ class DownloadManager: ObservableObject {
     ) async -> DownloadResult {
         
         if backendUrl.isEmpty {
-            // 后端地址未配置
-            return .failure(error: "请在设置中配置后端地址")
+            // 服务端地址未配置
+            logError("下载失败: 服务端地址未配置")
+            return .failure(error: "请在设置中配置服务端地址")
         }
+        
+        logInfo("开始下载 \(urls.count) 个链接 (\(downloaderType.rawValue))")
         
         var totalMediaDownloaded = 0
         
@@ -86,7 +89,7 @@ class DownloadManager: ObservableObject {
             
             // 发起网络请求
             do {
-                // 向后端发起提取图片或视频 URLs 的请求
+                // 向服务端发起提取图片或视频 URLs 的请求
                 let mediaUrls = try await fetchMediaUrls(url: url, downloaderType: downloaderType)
                 
                 if mediaUrls.isEmpty {
@@ -109,7 +112,7 @@ class DownloadManager: ObservableObject {
                     )
                     
                     // Debug: 检查提取的媒体链接
-                    print("⚠️ [\(currentLine) / \(urls.count)] 未提取到图片或视频的链接, 原始 URL: \(url)")
+                    logError("[\(currentLine) / \(urls.count)] 未提取到图片或视频的链接, 原始 URL: \(url)")
                     return .failure(error: "【\(currentLine) / \(urls.count)】未提取到图片或视频的链接")
                 }
                 
@@ -213,6 +216,7 @@ class DownloadManager: ObservableObject {
                                     isSuccess: false,
                                     mediaCount: index
                                 )
+                                logError("[\(currentLine) / \(urls.count)] 实况图片保存失败（\(index + 1) / \(mediaUrls.count)）")
                                 return .failure(error: "实况图片保存失败")
                             }
                         } catch {
@@ -266,7 +270,7 @@ class DownloadManager: ObservableObject {
                             ))
                             
                             // Debug: 检查提取的链接
-                            print("⚠️ [\(currentLine) / \(urls.count)] 提取的链接: \(mediaUrl)（\(index + 1) / \(mediaUrls.count)）")
+                            logError("[\(currentLine) / \(urls.count)] 提取的链接无效: \(mediaUrl)（\(index + 1) / \(mediaUrls.count)）")
                             return .failure(error: errorMsg)
                         }
                         
@@ -307,6 +311,7 @@ class DownloadManager: ObservableObject {
                                         isSuccess: false,
                                         mediaCount: index
                                     )
+                                    logError("[\(currentLine) / \(urls.count)] 视频保存失败（\(index + 1) / \(mediaUrls.count)）")
                                     return .failure(error: "视频保存失败")
                                 }
                             default: // 图片下载器
@@ -326,6 +331,7 @@ class DownloadManager: ObservableObject {
                                         isSuccess: false,
                                         mediaCount: index
                                     )
+                                    logError("[\(currentLine) / \(urls.count)] 图片保存失败（\(index + 1) / \(mediaUrls.count)）")
                                     return .failure(error: "图片保存失败")
                                 }
                             }
@@ -382,14 +388,16 @@ class DownloadManager: ObservableObject {
                     isSuccess: false,
                     mediaCount: 0
                 )
+                logError("[\(currentLine) / \(urls.count)] 下载过程发生错误: \(errorMsg)")
                 return .failure(error: errorMsg)
             }
         }
         
+        logInfo("下载任务全部完成, 共下载 \(totalMediaDownloaded) 个媒体文件")
         return .success(mediaCount: totalMediaDownloaded)
     }
     
-    // 向后端发起提取图片或视频 URLs 的请求
+    // 向服务端发起提取图片或视频 URLs 的请求
     private func fetchMediaUrls(url: URL, downloaderType: ImageDownloaderType) async throws -> [Any] {
         guard !backendUrl.isEmpty else {
             throw URLError(.badURL)
@@ -416,7 +424,7 @@ class DownloadManager: ObservableObject {
         request.setValue(userAgent, forHTTPHeaderField: "User-Agent")
         request.timeoutInterval = 300
 
-        print("🔗 向 \(requestUrl) 发起解析请求")
+        logInfo("向 \(requestUrl) 发起解析请求")
 
         // 发起请求
         let (data, response) = try await URLSession.shared.data(for: request)
@@ -549,10 +557,10 @@ class DownloadManager: ObservableObject {
                 // 清理临时文件
                 do {
                     try FileManager.default.removeItem(at: tempVideoUrl)
-                    print("♻️ [\(currentLine) / \(totalLines)] 已删除临时视频文件: \(tempVideoUrl)（\(currentIndex) / \(totalCount)）") }
+                    logDebug("[\(currentLine) / \(totalLines)] 已删除临时视频文件: \(tempVideoUrl)（\(currentIndex) / \(totalCount)）") }
                 catch {
                     // Debug
-                    print("⚠️ [\(currentLine) / \(totalLines)] 删除临时视频文件失败: \(error)（\(currentIndex) / \(totalCount)）")
+                    logWarn("[\(currentLine) / \(totalLines)] 删除临时视频文件失败: \(error)（\(currentIndex) / \(totalCount)）")
                 }
             }
             try await PHPhotoLibrary.shared().performChanges {
@@ -644,10 +652,10 @@ class DownloadManager: ObservableObject {
                 do {
                     try FileManager.default.removeItem(at: tempCoverUrl)
                     try FileManager.default.removeItem(at: tempVideoUrl)
-                    print("♻️ [\(currentLine) / \(totalLines)] 已删除临时文件: \(tempCoverUrl), \(tempVideoUrl)（\(currentIndex) / \(totalCount)）")
+                    logDebug("[\(currentLine) / \(totalLines)] 已删除临时文件: \(tempCoverUrl), \(tempVideoUrl)（\(currentIndex) / \(totalCount)）")
                 } catch {
                     // Debug
-                    print("⚠️ [\(currentLine) / \(totalLines)] 删除临时文件失败: \(error)（\(currentIndex) / \(totalCount)）")
+                    logWarn("[\(currentLine) / \(totalLines)] 删除临时文件失败: \(error)（\(currentIndex) / \(totalCount)）")
                 }
             }
             

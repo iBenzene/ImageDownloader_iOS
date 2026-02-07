@@ -78,7 +78,7 @@
 }
 
 /**
- * 获取当前时间，格式为「年-月-日_时-分-秒」，例如：2025-01-04_15-07-14
+ * 获取当前时间，格式为「年-月-日_时-分-秒」，例如: 2025-01-04_15-07-14
  */
 - (NSString *)getCurrentTime {
     NSDateFormatter *formatter = [[NSDateFormatter alloc] init];

@@ -59,7 +59,7 @@ struct MainTabView: View {
             }
             .tag(Tab.savedLinks)
             
-            NavigationView {
+            NavigationStack {
                 SettingsView()
             }
             .tabItem {

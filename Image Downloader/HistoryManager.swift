@@ -152,7 +152,7 @@ class HistoryManager: ObservableObject {
         
         if items.count < countBefore {
             saveItems()
-            print("🧹 Cleaned up \(countBefore - items.count) stale history records")
+            logInfo("Cleaned up \(countBefore - items.count) stale history records")
         }
     }
     
@@ -217,7 +217,7 @@ class HistoryManager: ObservableObject {
         do {
             items = try JSONDecoder().decode([HistoryItem].self, from: data)
         } catch {
-            print("⚠️ Failed to load history: \(error.localizedDescription)")
+            logError("Failed to load history: \(error.localizedDescription)")
             items = []
         }
     }
@@ -227,7 +227,7 @@ class HistoryManager: ObservableObject {
             let data = try JSONEncoder().encode(items)
             UserDefaults.standard.set(data, forKey: storageKey)
         } catch {
-            print("⚠️ Failed to save history: \(error.localizedDescription)")
+            logError("Failed to save history: \(error.localizedDescription)")
         }
     }
 }

@@ -208,7 +208,7 @@ class SavedLinksManager: ObservableObject {
         
         if items.count < countBefore {
             saveItems()
-            print("🧹 Cleaned up \(countBefore - items.count) stale saved links")
+            logInfo("Cleaned up \(countBefore - items.count) stale saved links")
         }
     }
     
@@ -272,7 +272,7 @@ class SavedLinksManager: ObservableObject {
         do {
             items = try JSONDecoder().decode([SavedLinkItem].self, from: data)
         } catch {
-            print("⚠️ Failed to load saved links: \(error.localizedDescription)")
+            logError("Failed to load saved links: \(error.localizedDescription)")
             items = []
         }
     }
@@ -282,7 +282,7 @@ class SavedLinksManager: ObservableObject {
             let data = try JSONEncoder().encode(items)
             UserDefaults.standard.set(data, forKey: storageKey)
         } catch {
-            print("⚠️ Failed to save links: \(error.localizedDescription)")
+            logError("Failed to save links: \(error.localizedDescription)")
         }
     }
 }

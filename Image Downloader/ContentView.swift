@@ -248,8 +248,8 @@ struct ContentView: View {
         }
         
         if backendUrl.isEmpty {
-            // 后端地址未配置
-            feedbackMessage = "请在设置中配置后端地址"
+            // 服务端地址未配置
+            feedbackMessage = "请在设置中配置服务端地址"
             isError = true
             return
         }

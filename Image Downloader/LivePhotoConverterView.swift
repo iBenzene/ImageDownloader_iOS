@@ -8,7 +8,7 @@
 import SwiftUI
 import PhotosUI
 
-// MARK: - 实况照片转换器视图
+// 实况照片转换器视图
 struct LivePhotoConverterView: View {
     @Environment(\.presentationMode) private var presentationMode
     
@@ -144,7 +144,8 @@ struct LivePhotoConverterView: View {
                 }
             }
         } catch {
-            alertMsg = "读取选取的项目失败：\(error.localizedDescription)"
+            logError("读取选取的项目失败: \(error.localizedDescription)")
+            alertMsg = "读取选取的项目失败: \(error.localizedDescription)"
             showAlert = true
         }
     }
@@ -155,11 +156,18 @@ struct LivePhotoConverterView: View {
         isProcessing = true
         
         let helper = LivePhotoHelper()
+        logInfo("开始合成实况照片...")
         helper.saveLivePhoto(cover, videoUrl: video) { success, error in
             DispatchQueue.main.async {
                 isProcessing = false
-                alertMsg = success ? "实况照片已保存 🎉" :
-                (error?.localizedDescription ?? "实况照片合成失败 ❌")
+                if success {
+                    logInfo("实况照片合成并保存成功 🎉")
+                    alertMsg = "实况照片已保存 🎉"
+                } else {
+                    let errorMsg = error?.localizedDescription ?? "实况照片合成失败 ❌"
+                    logError("实况照片合成失败: \(errorMsg)")
+                    alertMsg = errorMsg
+                }
                 showAlert = true
             }
         }
@@ -190,7 +198,7 @@ private func workDir() throws -> URL {
 private func cleanupWorkDir() {
     let base = FileManager.default.temporaryDirectory.appendingPathComponent(workDirName, isDirectory: true)
     try? FileManager.default.removeItem(at: base)
-    print("♻️ 清理缓存：\(base.path)")
+    logDebug("清理缓存: \(base.path)")
 }
 
 // 预览

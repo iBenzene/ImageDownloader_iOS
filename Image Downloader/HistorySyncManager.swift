@@ -79,14 +79,14 @@ class HistorySyncManager: ObservableObject {
     func sync() async {
         guard !isSyncing else { return }
         guard !backendUrl.isEmpty, !backendToken.isEmpty else {
-            print("⚠️ Sync skipped: Missing backend URL or Token")
+            logWarn("Sync skipped: Missing backend URL or Token")
             return
         }
         
         isSyncing = true
         defer { isSyncing = false }
         
-        print("🔄 Starting History Sync...")
+        logDebug("Starting History Sync...")
         
         // 1. Prepare Request
         let dirtyItems = HistoryManager.shared.fetchDirtyRecords()
@@ -99,7 +99,7 @@ class HistorySyncManager: ObservableObject {
         let endpoint = "\(baseUrl)/v1/history/sync"
         
         guard var components = URLComponents(string: endpoint) else {
-            print("⚠️ Sync failed: Invalid URL")
+            logWarn("Sync failed: Invalid URL")
             return
         }
         
@@ -121,7 +121,7 @@ class HistorySyncManager: ObservableObject {
         do {
             request.httpBody = try JSONEncoder().encode(requestBody)
         } catch {
-            print("⚠️ Sync failed: Failed to encode body - \(error.localizedDescription)")
+            logWarn("Sync failed: Failed to encode body - \(error.localizedDescription)")
             return
         }
         
@@ -130,16 +130,16 @@ class HistorySyncManager: ObservableObject {
             let (data, response) = try await URLSession.shared.data(for: request)
             
             guard let httpResponse = response as? HTTPURLResponse else {
-                print("⚠️ Sync failed: Invalid response")
+                logWarn("Sync failed: Invalid response")
                 return
             }
             
             if httpResponse.statusCode != 200 {
                 if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                    let errorMessage = json["error"] as? String {
-                    print("⚠️ Sync failed: Backend error - \(errorMessage)")
+                    logWarn("Sync failed: Backend error - \(errorMessage)")
                 } else {
-                    print("⚠️ Sync failed: HTTP \(httpResponse.statusCode)")
+                    logWarn("Sync failed: HTTP \(httpResponse.statusCode)")
                 }
                 return
             }
@@ -166,10 +166,14 @@ class HistorySyncManager: ObservableObject {
                 }
             }
             
-            print("✅ History Sync Completed. Pushed: \(apiItems.count), Pulled: \(remoteRecords.count)")
+            if apiItems.count > 0 || remoteRecords.count > 0 {
+                logInfo("History Sync Completed. Pushed: \(apiItems.count), Pulled: \(remoteRecords.count)")
+            } else {
+                logDebug("History Sync Completed. No changes detected.")
+            }
             
         } catch {
-            print("⚠️ Sync failed: \(error.localizedDescription)")
+            logError("Sync failed: \(error.localizedDescription)")
         }
     }
 }

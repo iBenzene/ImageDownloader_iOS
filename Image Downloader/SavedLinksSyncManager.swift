@@ -74,14 +74,14 @@ class SavedLinksSyncManager: ObservableObject {
     func sync() async {
         guard !isSyncing else { return }
         guard !backendUrl.isEmpty, !backendToken.isEmpty else {
-            print("⚠️ SavedLinks Sync skipped: Missing backend URL or Token")
+            logWarn("SavedLinks Sync skipped: Missing backend URL or Token")
             return
         }
         
         isSyncing = true
         defer { isSyncing = false }
         
-        print("🔄 Starting SavedLinks Sync...")
+        logDebug("Starting SavedLinks Sync...")
         
         let dirtyItems = SavedLinksManager.shared.fetchDirtyRecords()
         let apiItems = dirtyItems.map { SavedLinkItemAPI(from: $0) }
@@ -92,7 +92,7 @@ class SavedLinksSyncManager: ObservableObject {
         let endpoint = "\(baseUrl)/v1/saved-links/sync"
         
         guard var components = URLComponents(string: endpoint) else {
-            print("⚠️ SavedLinks Sync failed: Invalid URL")
+            logWarn("SavedLinks Sync failed: Invalid URL")
             return
         }
         
@@ -114,7 +114,7 @@ class SavedLinksSyncManager: ObservableObject {
         do {
             request.httpBody = try JSONEncoder().encode(requestBody)
         } catch {
-            print("⚠️ SavedLinks Sync failed: Failed to encode body - \(error.localizedDescription)")
+            logWarn("SavedLinks Sync failed: Failed to encode body - \(error.localizedDescription)")
             return
         }
         
@@ -122,16 +122,16 @@ class SavedLinksSyncManager: ObservableObject {
             let (data, response) = try await URLSession.shared.data(for: request)
             
             guard let httpResponse = response as? HTTPURLResponse else {
-                print("⚠️ SavedLinks Sync failed: Invalid response")
+                logWarn("SavedLinks Sync failed: Invalid response")
                 return
             }
             
             if httpResponse.statusCode != 200 {
                 if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                    let errorMessage = json["error"] as? String {
-                    print("⚠️ SavedLinks Sync failed: Backend error - \(errorMessage)")
+                    logError("SavedLinks Sync failed: Backend error - \(errorMessage)")
                 } else {
-                    print("⚠️ SavedLinks Sync failed: HTTP \(httpResponse.statusCode)")
+                    logError("SavedLinks Sync failed: HTTP \(httpResponse.statusCode)")
                 }
                 return
             }
@@ -153,10 +153,14 @@ class SavedLinksSyncManager: ObservableObject {
                 }
             }
             
-            print("✅ SavedLinks Sync Completed. Pushed: \(apiItems.count), Pulled: \(remoteRecords.count)")
+            if apiItems.count > 0 || remoteRecords.count > 0 {
+                logInfo("SavedLinks Sync Completed. Pushed: \(apiItems.count), Pulled: \(remoteRecords.count)")
+            } else {
+                logDebug("SavedLinks Sync Completed. No changes detected.")
+            }
             
         } catch {
-            print("⚠️ SavedLinks Sync failed: \(error.localizedDescription)")
+            logError("SavedLinks Sync failed: \(error.localizedDescription)")
         }
     }
 }
