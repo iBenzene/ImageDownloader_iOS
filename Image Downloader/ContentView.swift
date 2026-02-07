@@ -341,10 +341,9 @@ struct ContentView: View {
             return
         }
         
-        // Check for duplicates
-        let existingLinks = SavedLinksManager.shared.items.map { $0.url }
+        // Check for duplicates (only active links)
         let duplicates = savedUrls.filter { url in
-            existingLinks.contains(url)
+            SavedLinksManager.shared.hasActiveLink(url: url)
         }
         
         if !duplicates.isEmpty {

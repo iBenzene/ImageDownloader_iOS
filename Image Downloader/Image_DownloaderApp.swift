@@ -15,6 +15,10 @@ struct Image_DownloaderApp: App {
         if let accentColor = UIColor(named: "AccentColor") {
             UIView.appearance().tintColor = accentColor
         }
+        
+        // Cleanup stale deleted items on app launch
+        SavedLinksManager.shared.cleanupStaleDeletedItems()
+        HistoryManager.shared.cleanupStaleDeletedItems()
     }
 
     var body: some Scene {

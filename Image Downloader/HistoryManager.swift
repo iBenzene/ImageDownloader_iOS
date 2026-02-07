@@ -144,6 +144,18 @@ class HistoryManager: ObservableObject {
         saveItems()
     }
     
+    // Hard delete items that have been soft-deleted for more than 30 days
+    func cleanupStaleDeletedItems() {
+        let cutoffDate = Calendar.current.date(byAdding: .day, value: -30, to: Date()) ?? Date()
+        let countBefore = items.count
+        items.removeAll { $0.isDeleted && $0.updatedAt < cutoffDate }
+        
+        if items.count < countBefore {
+            saveItems()
+            print("🧹 Cleaned up \(countBefore - items.count) stale history records")
+        }
+    }
+    
     // Hard delete (for internal cleanup if needed)
     func hardDelete(id: UUID) {
         items.removeAll { $0.id == id }

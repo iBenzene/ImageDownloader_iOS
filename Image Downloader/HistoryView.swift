@@ -51,17 +51,21 @@ struct HistoryView: View {
         .navigationTitle("下载记录")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
-                HStack(spacing: 0) {
-                    // Sync Button
+            if #available(iOS 26, *) {
+                // iOS 26+: Use separate ToolbarItems for proper pill styling
+                
+                // Sync Button
+                ToolbarItem(placement: .navigationBarTrailing) {
                     Button(action: {
                         triggerSync()
                     }) {
                         Image(systemName: "arrow.triangle.2.circlepath")
                             .foregroundColor(.accentColor)
                     }
-                    .padding(.trailing, 8)
-
+                }
+                
+                // Clear Button
+                ToolbarItem(placement: .navigationBarTrailing) {
                     if !historyManager.visibleItems.isEmpty {
                         Button(action: {
                             showClearConfirmation = true
@@ -69,7 +73,30 @@ struct HistoryView: View {
                             Image(systemName: "trash")
                                 .foregroundColor(.red)
                         }
-                        .padding(.trailing, 20)
+                        .padding(.trailing, 8)
+                    }
+                }
+            } else {
+                // iOS 16/17: Keep original styling with HStack and custom padding
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    HStack(spacing: 0) {
+                        Button(action: {
+                            triggerSync()
+                        }) {
+                            Image(systemName: "arrow.triangle.2.circlepath")
+                                .foregroundColor(.accentColor)
+                        }
+                        .padding(.trailing, 8)
+
+                        if !historyManager.visibleItems.isEmpty {
+                            Button(action: {
+                                showClearConfirmation = true
+                            }) {
+                                Image(systemName: "trash")
+                                    .foregroundColor(.red)
+                            }
+                            .padding(.trailing, 20)
+                        }
                     }
                 }
             }

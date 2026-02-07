@@ -38,56 +38,111 @@ struct SavedLinksView: View {
         .navigationTitle("已收藏")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            // Left: Download All Button
-            ToolbarItem(placement: .navigationBarLeading) {
-                if !savedLinksManager.visibleItems.isEmpty {
-                    if isBatchDownloading {
-                        HStack(spacing: 6) {
-                            ProgressView()
-                                .scaleEffect(0.8)
-                            Text("\(batchCurrent) / \(batchTotal)")
-                                .font(.caption)
-                                .monospacedDigit()
-                                .foregroundColor(.secondary)
+            if #available(iOS 26, *) {
+                // iOS 26+: Use separate ToolbarItems with padding for alignment
+                
+                // Left: Download All Button
+                ToolbarItem(placement: .navigationBarLeading) {
+                    if !savedLinksManager.visibleItems.isEmpty {
+                        if isBatchDownloading {
+                            HStack(spacing: 6) {
+                                ProgressView()
+                                    .scaleEffect(0.8)
+                                Text("\(batchCurrent) / \(batchTotal)")
+                                    .font(.caption)
+                                    .monospacedDigit()
+                                    .foregroundColor(.secondary)
+                            }
+                            .fixedSize(horizontal: true, vertical: false)
+                        } else {
+                            Button(action: downloadAll) {
+                                Image(systemName: "arrow.down")
+                                    .foregroundColor(Color("AccentColor"))
+                            }
+                            .disabled(savedLinksManager.visibleItems.allSatisfy { $0.status == .success })
+                            .opacity(savedLinksManager.visibleItems.allSatisfy { $0.status == .success } ? 0.5 : 1.0)
                         }
-                        .padding(.leading, 20)
-                    } else {
-                        Button(action: downloadAll) {
-                            Image(systemName: "square.and.arrow.down")
-                                .foregroundColor(Color("AccentColor"))
-                                .padding(.leading, 18)
-                        }
-                        // Only enable if there are items that need downloading
-                        .disabled(savedLinksManager.visibleItems.allSatisfy { $0.status == .success })
-                        .opacity(savedLinksManager.visibleItems.allSatisfy { $0.status == .success } ? 0.5 : 1.0)
                     }
                 }
-            }
-            
-            // Right: Sync & Trash Buttons
-            ToolbarItem(placement: .navigationBarTrailing) {
-                HStack(spacing: 0) {
+                
+                // Right: Sync Button
+                ToolbarItem(placement: .navigationBarTrailing) {
                     if !savedLinksManager.visibleItems.isEmpty {
-                        // Sync Button
                         Button(action: {
                             Task { await SavedLinksSyncManager.shared.sync() }
                         }) {
                             Image(systemName: "arrow.triangle.2.circlepath")
                                 .foregroundColor(Color("AccentColor"))
-                                .padding(.trailing, 8)
                         }
                         .disabled(isBatchDownloading)
-                        
-                        // Clear All Button
+                    }
+                }
+                
+                // Right: Clear Button
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    if !savedLinksManager.visibleItems.isEmpty {
                         Button(action: {
                             showClearConfirmation = true
                         }) {
                             Image(systemName: "trash")
                                 .foregroundColor(.red)
-                                .padding(.trailing, 20)
                         }
+                        .padding(.trailing, 8)
                         .disabled(isBatchDownloading)
                         .opacity(isBatchDownloading ? 0.5 : 1.0)
+                    }
+                }
+            } else {
+                // iOS 16/17: Keep original styling with custom padding
+                
+                // Left: Download All Button
+                ToolbarItem(placement: .navigationBarLeading) {
+                    if !savedLinksManager.visibleItems.isEmpty {
+                        if isBatchDownloading {
+                            HStack(spacing: 6) {
+                                ProgressView()
+                                    .scaleEffect(0.8)
+                                Text("\(batchCurrent) / \(batchTotal)")
+                                    .font(.caption)
+                                    .monospacedDigit()
+                                    .foregroundColor(.secondary)
+                            }
+                            .padding(.leading, 20)
+                        } else {
+                            Button(action: downloadAll) {
+                                Image(systemName: "square.and.arrow.down")
+                                    .foregroundColor(Color("AccentColor"))
+                                    .padding(.leading, 18)
+                            }
+                            .disabled(savedLinksManager.visibleItems.allSatisfy { $0.status == .success })
+                            .opacity(savedLinksManager.visibleItems.allSatisfy { $0.status == .success } ? 0.5 : 1.0)
+                        }
+                    }
+                }
+                
+                // Right: Sync & Clear Buttons (combined in HStack)
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    HStack(spacing: 0) {
+                        if !savedLinksManager.visibleItems.isEmpty {
+                            Button(action: {
+                                Task { await SavedLinksSyncManager.shared.sync() }
+                            }) {
+                                Image(systemName: "arrow.triangle.2.circlepath")
+                                    .foregroundColor(Color("AccentColor"))
+                                    .padding(.trailing, 8)
+                            }
+                            .disabled(isBatchDownloading)
+                            
+                            Button(action: {
+                                showClearConfirmation = true
+                            }) {
+                                Image(systemName: "trash")
+                                    .foregroundColor(.red)
+                                    .padding(.trailing, 20)
+                            }
+                            .disabled(isBatchDownloading)
+                            .opacity(isBatchDownloading ? 0.5 : 1.0)
+                        }
                     }
                 }
             }

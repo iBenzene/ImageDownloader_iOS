@@ -19,7 +19,7 @@ enum SavedLinkStatus: String, Codable, Equatable {
 struct SavedLinkItem: Identifiable, Codable, Equatable {
     let id: UUID
     let url: String
-    let timestamp: Date
+    var timestamp: Date
     let downloaderType: String
     var status: SavedLinkStatus
     
@@ -98,22 +98,66 @@ class SavedLinksManager: ObservableObject {
         loadItems()
     }
     
+    // Check if a link exists and is active (not deleted)
+    func hasActiveLink(url: String) -> Bool {
+        return visibleItems.contains { $0.url == url }
+    }
+
     // Add a new saved link
     func addLink(url: String, downloaderType: String) {
-        let item = SavedLinkItem(url: url, downloaderType: downloaderType)
-        items.insert(item, at: 0)
-        items = Array(items.prefix(maxItems))
-        saveItems()
+        addLinks(urls: [url], downloaderType: downloaderType)
     }
     
     // Add multiple links at once
     func addLinks(urls: [String], downloaderType: String) {
+        var needsSave = false
+        
         for url in urls {
-            let item = SavedLinkItem(url: url, downloaderType: downloaderType)
-            items.insert(item, at: 0)
+            // Find all matching items (active or deleted)
+            let matchingIndices = items.indices.filter { items[$0].url == url }
+            
+            if !matchingIndices.isEmpty {
+                // Pick primary (prefer active)
+                let winnerIndex = matchingIndices.first(where: { !items[$0].isDeleted }) ?? matchingIndices.first!
+                var winner = items[winnerIndex]
+                
+                // Restore if deleted
+                if winner.isDeleted {
+                    winner.isDeleted = false
+                }
+                
+                // Update metadata for the winner
+                winner.timestamp = Date()
+                winner.updatedAt = Date()
+                winner.isDirty = true
+                
+                // Mark all OTHER matches as deleted (soft delete duplicates)
+                for index in matchingIndices where index != winnerIndex {
+                    if !items[index].isDeleted {
+                        items[index].isDeleted = true
+                        items[index].updatedAt = Date()
+                        items[index].isDirty = true
+                        needsSave = true
+                    }
+                }
+                
+                // Move to top
+                items.remove(at: winnerIndex)
+                items.insert(winner, at: 0)
+                needsSave = true
+                
+            } else {
+                // New item
+                let item = SavedLinkItem(url: url, downloaderType: downloaderType)
+                items.insert(item, at: 0)
+                needsSave = true
+            }
         }
-        items = Array(items.prefix(maxItems))
-        saveItems()
+        
+        if needsSave {
+            items = Array(items.prefix(maxItems))
+            saveItems()
+        }
     }
     
     // Update status for a specific item
@@ -154,6 +198,18 @@ class SavedLinksManager: ObservableObject {
             }
         }
         saveItems()
+    }
+    
+    // Hard delete items that have been soft-deleted for more than 30 days
+    func cleanupStaleDeletedItems() {
+        let cutoffDate = Calendar.current.date(byAdding: .day, value: -30, to: Date()) ?? Date()
+        let countBefore = items.count
+        items.removeAll { $0.isDeleted && $0.updatedAt < cutoffDate }
+        
+        if items.count < countBefore {
+            saveItems()
+            print("🧹 Cleaned up \(countBefore - items.count) stale saved links")
+        }
     }
     
     // Fetch dirty records for sync
