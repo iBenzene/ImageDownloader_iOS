@@ -30,7 +30,7 @@ struct ContentView: View {
     @AppStorage("backendToken") private var backendToken: String = ""
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             VStack {
                 // 顶部栏
                 HStack {
@@ -182,7 +182,7 @@ struct ContentView: View {
                 }
             }
             .padding()
-            .navigationBarHidden(true)
+            .toolbar(.hidden, for: .navigationBar)
             .alert("重复链接提醒", isPresented: $showingDuplicateAlert) {
                 Button("取消", role: .cancel) {
                     pendingSavedLinks = []

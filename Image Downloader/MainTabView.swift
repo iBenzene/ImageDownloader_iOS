@@ -12,7 +12,7 @@ struct MainTabView: View {
     @State private var selectedTab: Tab = .home
     
     enum Tab: String, CaseIterable {
-        case home = "主页"
+        case home = "首页"
         case savedLinks = "已收藏"
         case settings = "设置"
         

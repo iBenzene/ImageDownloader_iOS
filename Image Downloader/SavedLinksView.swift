@@ -64,32 +64,31 @@ struct SavedLinksView: View {
                 }
             }
             
-            // Right: Clear All Button
+            // Right: Sync & Trash Buttons
             ToolbarItem(placement: .navigationBarTrailing) {
-                if !savedLinksManager.visibleItems.isEmpty {
-                    Button(action: {
-                        showClearConfirmation = true
-                    }) {
-                        Image(systemName: "trash")
-                            .foregroundColor(.red)
-                            .padding(.trailing, 20)
+                HStack(spacing: 0) {
+                    if !savedLinksManager.visibleItems.isEmpty {
+                        // Sync Button
+                        Button(action: {
+                            Task { await SavedLinksSyncManager.shared.sync() }
+                        }) {
+                            Image(systemName: "arrow.triangle.2.circlepath")
+                                .foregroundColor(Color("AccentColor"))
+                                .padding(.trailing, 8)
+                        }
+                        .disabled(isBatchDownloading)
+                        
+                        // Clear All Button
+                        Button(action: {
+                            showClearConfirmation = true
+                        }) {
+                            Image(systemName: "trash")
+                                .foregroundColor(.red)
+                                .padding(.trailing, 20)
+                        }
+                        .disabled(isBatchDownloading)
+                        .opacity(isBatchDownloading ? 0.5 : 1.0)
                     }
-                    .disabled(isBatchDownloading)
-                    .opacity(isBatchDownloading ? 0.5 : 1.0)
-                }
-            }
-            
-            // Right: Sync Button
-            ToolbarItem(placement: .navigationBarTrailing) {
-                if !savedLinksManager.visibleItems.isEmpty {
-                    Button(action: {
-                        Task { await SavedLinksSyncManager.shared.sync() }
-                    }) {
-                        Image(systemName: "arrow.triangle.2.circlepath")
-                            .foregroundColor(Color("AccentColor"))
-                            .padding(.trailing, 8)
-                    }
-                    .disabled(isBatchDownloading)
                 }
             }
         }
@@ -134,9 +133,15 @@ struct SavedLinksView: View {
                 let currentItem = savedLinksManager.items.first(where: { $0.id == item.id })
                 if currentItem?.status == .success { continue }
                 
+                // Set downloading state
+                await MainActor.run {
+                    SavedLinksManager.shared.setDownloading(itemId: item.id, progress: "正在下载...")
+                }
+                
                 guard let url = URL(string: item.url) else {
                     await MainActor.run {
                         SavedLinksManager.shared.updateStatus(for: item, newStatus: .failure)
+                        SavedLinksManager.shared.finishDownloading(itemId: item.id)
                     }
                     continue
                 }
@@ -152,6 +157,7 @@ struct SavedLinksView: View {
                 
                 // Update status
                 await MainActor.run {
+                    SavedLinksManager.shared.finishDownloading(itemId: item.id)
                     switch result {
                     case .success:
                         SavedLinksManager.shared.updateStatus(for: item, newStatus: .success)
@@ -205,7 +211,7 @@ struct SavedLinksView: View {
     private var savedLinksListView: some View {
         List {
             ForEach(savedLinksManager.visibleItems) { item in
-                SavedLinkItemRow(item: item)
+                SavedLinkItemRow(item: item, externalProgress: savedLinksManager.downloadingItems[item.id])
                     .listRowBackground(Color.clear)
                     .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
             }
@@ -223,11 +229,23 @@ struct SavedLinksView: View {
 // Saved Link Item Row
 struct SavedLinkItemRow: View {
     let item: SavedLinkItem
+    let externalProgress: String? // Progress from batch download
+    
     @State private var isCopied = false
     
     // Active download state (ephemeral)
     @State private var isDownloading = false
     @State private var downloadProgress = ""
+    
+    // Combine local and external state
+    private var effectiveIsDownloading: Bool {
+        isDownloading || externalProgress != nil
+    }
+    
+    private var effectiveProgress: String {
+        if isDownloading { return downloadProgress }
+        return externalProgress ?? ""
+    }
     
     var body: some View {
         HStack(spacing: 12) {
@@ -257,8 +275,8 @@ struct SavedLinkItemRow: View {
                                 .fill(Color("AccentColor").opacity(0.15))
                         )
                     
-                    if isDownloading {
-                        Text(downloadProgress)
+                    if effectiveIsDownloading {
+                        Text(effectiveProgress)
                             .font(.caption2)
                             .foregroundColor(.orange)
                     } else {
@@ -275,7 +293,7 @@ struct SavedLinkItemRow: View {
             // Action Buttons
             HStack(spacing: 12) {
                 // Reset Button (only shown after download attempt)
-                if !isDownloading && (item.status == .success || item.status == .failure) {
+                if !effectiveIsDownloading && (item.status == .success || item.status == .failure) {
                     Button(action: resetStatus) {
                         Image(systemName: "arrow.counterclockwise")
                             .font(.body)
@@ -286,7 +304,7 @@ struct SavedLinkItemRow: View {
                 }
                 
                 // Download Button
-                if !isDownloading && item.status == .none {
+                if !effectiveIsDownloading && item.status == .none {
                     Button(action: downloadItem) {
                         Image(systemName: "arrow.down.circle")
                             .font(.body)
@@ -319,7 +337,7 @@ struct SavedLinkItemRow: View {
     @ViewBuilder
     private var statusIcon: some View {
         ZStack {
-            if isDownloading {
+            if effectiveIsDownloading {
                 // Spinning Loading Icon
                 Circle()
                     .stroke(Color("AccentColor").opacity(0.3), lineWidth: 3)

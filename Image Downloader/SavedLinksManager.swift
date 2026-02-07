@@ -78,6 +78,9 @@ class SavedLinksManager: ObservableObject {
         items.filter { !$0.isDeleted }
     }
     
+    // Track active downloads (transient state, not saved)
+    @Published var downloadingItems: [UUID: String] = [:]
+    
     private let storageKey = "savedLinks"
     private let lastSyncedKey = "savedLinksLastSyncedAt"
     private let maxItems = 500
@@ -194,6 +197,14 @@ class SavedLinksManager: ObservableObject {
         if needsSave {
             saveItems()
         }
+    }
+    
+    func setDownloading(itemId: UUID, progress: String = "准备中...") {
+        downloadingItems[itemId] = progress
+    }
+    
+    func finishDownloading(itemId: UUID) {
+        downloadingItems.removeValue(forKey: itemId)
     }
     
     private func loadItems() {

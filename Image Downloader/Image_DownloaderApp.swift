@@ -20,7 +20,6 @@ struct Image_DownloaderApp: App {
     var body: some Scene {
         WindowGroup {
             MainTabView()
-                .tint(Color("AccentColor"))
         }
     }
 }

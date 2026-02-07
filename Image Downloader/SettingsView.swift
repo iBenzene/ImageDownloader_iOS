@@ -23,7 +23,7 @@ struct SettingsView: View {
                 TextField("请输入后端令牌", text: $backendToken)
             }
             
-            Section(header: Text("收藏模式").textCase(nil), footer: Text("开启后，主页的「下载」按钮将被替换为「收藏」，仅提取并保存有效链接而不下载资源。")) {
+            Section(header: Text("收藏模式").textCase(nil), footer: Text("开启后，首页的「下载」按钮将被替换为「收藏」，仅提取并保存有效链接而不下载资源。")) {
                 Toggle("仅保存链接", isOn: $saveLinksOnly)
             }
         }

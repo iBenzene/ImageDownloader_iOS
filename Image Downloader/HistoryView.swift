@@ -60,7 +60,7 @@ struct HistoryView: View {
                         Image(systemName: "arrow.triangle.2.circlepath")
                             .foregroundColor(.accentColor)
                     }
-                    .padding(.trailing, 16)
+                    .padding(.trailing, 8)
 
                     if !historyManager.visibleItems.isEmpty {
                         Button(action: {
@@ -69,10 +69,12 @@ struct HistoryView: View {
                             Image(systemName: "trash")
                                 .foregroundColor(.red)
                         }
+                        .padding(.trailing, 20)
                     }
                 }
             }
         }
+        .toolbar(.hidden, for: .tabBar)
         .alert("清空下载记录", isPresented: $showClearConfirmation) {
             Button("取消", role: .cancel) {}
             Button("清空", role: .destructive) {

@@ -76,6 +76,7 @@ struct LivePhotoConverterView: View {
         }
         .navigationBarTitle("实况图片转换器", displayMode: .inline)
         .navigationBarItems(trailing: trailingBarItem)
+        .toolbar(.hidden, for: .tabBar)
         .onAppear {
             cleanupWorkDir() // 页面加载时清理一次缓存
             if coverUrl == nil {
@@ -110,7 +111,7 @@ struct LivePhotoConverterView: View {
         .alert(isPresented: $showAlert) {
             Alert(title: Text(alertMsg),
                   dismissButton: .default(Text("好的")) {
-                presentationMode.wrappedValue.dismiss() // 返回主页
+                presentationMode.wrappedValue.dismiss() // 返回首页
             })
         }
     }
@@ -175,7 +176,7 @@ private extension PhotosPickerItem {
     }
 }
 
-// MARK: - 临时文件管理工具
+// 临时文件管理工具
 private let workDirName = "LivePhotoWork"
 
 private func workDir() throws -> URL {
@@ -192,7 +193,7 @@ private func cleanupWorkDir() {
     print("♻️ 清理缓存：\(base.path)")
 }
 
-// MARK: - 预览
+// 预览
 struct LivePhotoConverterView_Previews: PreviewProvider {
     static var previews: some View {
         NavigationView {
