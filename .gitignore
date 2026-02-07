@@ -1,2 +1,26 @@
+## User-specific
+xcuserdata/
+
+## Build artifacts
+build/
+DerivedData/
+
+## Other Xcode-related
+*.moved-aside
+*.xcuserstate
+*.xccheckout
+*.xcscmblueprint
+*.xcsettings
+
+# System Files
 .DS_Store
+*.swp
+*~
+profile
+
+# VS Code
 .vscode/
+
+## Swift Package Manager
+.build/
+.swiftpm/
