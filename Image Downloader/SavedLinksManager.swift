@@ -235,12 +235,16 @@ class SavedLinksManager: ObservableObject {
             if let index = items.firstIndex(where: { $0.id == remote.id }) {
                 let local = items[index]
                 if remote.updatedAt >= local.updatedAt {
+                    logDebug("Merge [Update]: \(remote.id) - Local isDeleted: \(local.isDeleted) -> Remote isDeleted: \(remote.isDeleted) (Remote updatedAt: \(remote.updatedAt) >= Local: \(local.updatedAt))")
                     var merged = remote
                     merged.isDirty = false
                     items[index] = merged
                     needsSave = true
+                } else {
+                    logDebug("Merge [Skip]: \(remote.id) - Remote updatedAt: \(remote.updatedAt) < Local: \(local.updatedAt)")
                 }
             } else {
+                logDebug("Merge [New]: \(remote.id) - isDeleted: \(remote.isDeleted)")
                 var newRecord = remote
                 newRecord.isDirty = false
                 items.append(newRecord)

@@ -48,6 +48,10 @@ struct SavedLinkItemAPI: Codable {
         let updatedAtDate = formatter.date(from: updated_at) ?? Date()
         let parsedStatus = SavedLinkStatus(rawValue: status) ?? .none
         
+        if is_deleted {
+            logDebug("Parsing Remote Item: \(id) - URL: \(url.prefix(20))... - is_deleted: \(is_deleted), updated_at: \(updated_at)")
+        }
+        
         return SavedLinkItem(
             id: id,
             url: url,
@@ -98,9 +102,12 @@ class SavedLinksSyncManager: ObservableObject {
         
         var queryItems = [URLQueryItem(name: "token", value: backendToken)]
         
-        if let lastSynced = SavedLinksManager.shared.lastSyncedAt {
+        let incrementalSync = UserDefaults.standard.bool(forKey: "incrementalSync")
+        if incrementalSync, let lastSynced = SavedLinksManager.shared.lastSyncedAt {
             let encodedDate = ISO8601DateFormatter.string(from: lastSynced, timeZone: TimeZone(secondsFromGMT: 0)!, formatOptions: [.withInternetDateTime, .withFractionalSeconds])
             queryItems.append(URLQueryItem(name: "since", value: encodedDate))
+        } else if !incrementalSync {
+            logDebug("Performing full SavedLinks sync (Incremental sync disabled)")
         }
         
         components.queryItems = queryItems
@@ -137,6 +144,8 @@ class SavedLinksSyncManager: ObservableObject {
             }
             
             let syncResponse = try JSONDecoder().decode(SavedLinksSyncResponse.self, from: data)
+            
+            logDebug("Pulled \(syncResponse.records.count) records from remote. SyncedAt: \(syncResponse.syncedAt)")
             
             let remoteRecords = syncResponse.records.map { $0.toLocalItem() }
             

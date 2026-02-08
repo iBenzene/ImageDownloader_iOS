@@ -186,13 +186,17 @@ class HistoryManager: ObservableObject {
                 // Conflict resolution: Remote wins if newer (or backend logic implies remote is truth)
                 let local = items[index]
                 if remote.updatedAt >= local.updatedAt {
+                    logDebug("History Merge [Update]: \(remote.id) - Local isDeleted: \(local.isDeleted) -> Remote isDeleted: \(remote.isDeleted) (Remote updatedAt: \(remote.updatedAt) >= Local: \(local.updatedAt))")
                     var merged = remote
                     merged.isDirty = false
                     items[index] = merged
                     needsSave = true
+                } else {
+                    logDebug("History Merge [Skip]: \(remote.id) - Remote updatedAt: \(remote.updatedAt) < Local: \(local.updatedAt)")
                 }
             } else {
                 // Insert new record
+                logDebug("History Merge [New]: \(remote.id) - isDeleted: \(remote.isDeleted)")
                 var newRecord = remote
                 newRecord.isDirty = false
                 items.append(newRecord)

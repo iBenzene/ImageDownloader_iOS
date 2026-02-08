@@ -12,6 +12,7 @@ struct SettingsView: View {
     @AppStorage("backendUrl") private var backendUrl: String = ""
     @AppStorage("backendToken") private var backendToken: String = ""
     @AppStorage("saveLinksOnly") private var saveLinksOnly: Bool = false
+    @AppStorage("incrementalSync") private var incrementalSync: Bool = true
     @AppStorage("logDisplayLevel") private var logDisplayLevel: Int = 1
 
     var body: some View {
@@ -26,6 +27,10 @@ struct SettingsView: View {
             
             Section(header: Text("收藏模式").textCase(nil), footer: Text("开启后，首页的「下载」按钮将被替换为「收藏」，仅提取并保存有效链接而不下载资源。")) {
                 Toggle("仅保存链接", isOn: $saveLinksOnly)
+            }
+
+            Section(header: Text("同步").textCase(nil), footer: Text("开启增量同步将仅获取自上次同步以来的更新。为节约您的流量，建议保持开启状态。")) {
+                Toggle("增量同步", isOn: $incrementalSync)
             }
             
             Section(header: Text("日志").textCase(nil), footer: Text("如果遇到问题，可以查看日志以获取更多信息。")) {

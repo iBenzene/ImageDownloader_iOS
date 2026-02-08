@@ -51,6 +51,10 @@ struct HistoryItemAPI: Codable {
         let timestampDate = formatter.date(from: created_at) ?? Date()
         let updatedAtDate = formatter.date(from: updated_at) ?? Date()
         
+        if is_deleted {
+            logDebug("Parsing Remote History Item: \(id) - URL: \(url.prefix(20))... - is_deleted: \(is_deleted), updated_at: \(updated_at)")
+        }
+        
         return HistoryItem(
             id: id,
             url: url,
@@ -105,9 +109,12 @@ class HistorySyncManager: ObservableObject {
         
         var queryItems = [URLQueryItem(name: "token", value: backendToken)]
         
-        if let lastSynced = HistoryManager.shared.lastSyncedAt {
+        let incrementalSync = UserDefaults.standard.bool(forKey: "incrementalSync")
+        if incrementalSync, let lastSynced = HistoryManager.shared.lastSyncedAt {
             let encodedDate = ISO8601DateFormatter.string(from: lastSynced, timeZone: TimeZone(secondsFromGMT: 0)!, formatOptions: [.withInternetDateTime, .withFractionalSeconds])
             queryItems.append(URLQueryItem(name: "since", value: encodedDate))
+        } else if !incrementalSync {
+            logDebug("Performing full history sync (Incremental sync disabled)")
         }
         
         components.queryItems = queryItems
@@ -146,6 +153,8 @@ class HistorySyncManager: ObservableObject {
             
             // 4. Handle Response
             let syncResponse = try JSONDecoder().decode(SyncResponse.self, from: data)
+            
+            logDebug("Pulled \(syncResponse.records.count) history records from remote. SyncedAt: \(syncResponse.syncedAt)")
             
             // Process Remote Records
             let remoteRecords = syncResponse.records.map { $0.toLocalItem() }
