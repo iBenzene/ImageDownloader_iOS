@@ -28,6 +28,9 @@ struct SavedLinkItem: Identifiable, Codable, Equatable {
     var isDeleted: Bool
     var isDirty: Bool
     
+    // Cached resource URLs from preheating
+    var cachedUrls: [String]?
+    
     init(url: String, downloaderType: String, status: SavedLinkStatus = .none) {
         self.id = UUID()
         self.url = url
@@ -38,10 +41,11 @@ struct SavedLinkItem: Identifiable, Codable, Equatable {
         self.updatedAt = Date()
         self.isDeleted = false
         self.isDirty = true
+        self.cachedUrls = nil
     }
     
     // Internal init for merging/syncing
-    init(id: UUID, url: String, timestamp: Date, downloaderType: String, status: SavedLinkStatus, updatedAt: Date, isDeleted: Bool, isDirty: Bool) {
+    init(id: UUID, url: String, timestamp: Date, downloaderType: String, status: SavedLinkStatus, updatedAt: Date, isDeleted: Bool, isDirty: Bool, cachedUrls: [String]? = nil) {
         self.id = id
         self.url = url
         self.timestamp = timestamp
@@ -50,6 +54,7 @@ struct SavedLinkItem: Identifiable, Codable, Equatable {
         self.updatedAt = updatedAt
         self.isDeleted = isDeleted
         self.isDirty = isDirty
+        self.cachedUrls = cachedUrls
     }
     
     // Custom decoding for migration
@@ -65,6 +70,7 @@ struct SavedLinkItem: Identifiable, Codable, Equatable {
         self.updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt) ?? timestamp
         self.isDeleted = try container.decodeIfPresent(Bool.self, forKey: .isDeleted) ?? false
         self.isDirty = try container.decodeIfPresent(Bool.self, forKey: .isDirty) ?? true
+        self.cachedUrls = try container.decodeIfPresent([String].self, forKey: .cachedUrls)
     }
 }
 
@@ -164,6 +170,16 @@ class SavedLinksManager: ObservableObject {
     func updateStatus(for item: SavedLinkItem, newStatus: SavedLinkStatus) {
         if let index = items.firstIndex(where: { $0.id == item.id }) {
             items[index].status = newStatus
+            items[index].updatedAt = Date()
+            items[index].isDirty = true
+            saveItems()
+        }
+    }
+    
+    // Update cached URLs for a specific item
+    func updateCachedUrls(for item: SavedLinkItem, cachedUrls: [String]) {
+        if let index = items.firstIndex(where: { $0.id == item.id }) {
+            items[index].cachedUrls = cachedUrls
             items[index].updatedAt = Date()
             items[index].isDirty = true
             saveItems()

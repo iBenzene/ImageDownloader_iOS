@@ -23,6 +23,7 @@ struct ContentView: View {
     @State private var pendingSavedLinks: [String] = []
     
     @AppStorage("saveLinksOnly") private var saveLinksOnly: Bool = false
+    @AppStorage("preheatResources") private var preheatResources: Bool = false
 
     @State private var selectedDownloader: ImageDownloaderType = .xhsImg
     
@@ -190,7 +191,9 @@ struct ContentView: View {
                     isWarning = true
                 }
                 Button("继续") {
-                    saveLinks(pendingSavedLinks)
+                    Task {
+                        await saveLinks(pendingSavedLinks)
+                    }
                 }
             } message: {
                 Text("检测到收藏列表中已存在部分链接，是否继续收藏？")
@@ -354,15 +357,15 @@ struct ContentView: View {
         }
         
         // No duplicates, save directly
-        saveLinks(savedUrls)
+        await saveLinks(savedUrls)
     }
     
-    // Helper to actually save links
-    func saveLinks(_ urls: [String]) {
+    // Helper to actually save links and optionally preheat resources
+    func saveLinks(_ urls: [String]) async {
         // Save all extracted URLs
         SavedLinksManager.shared.addLinks(urls: urls, downloaderType: selectedDownloader.rawValue)
         
-        // Clear input and show success message
+        // Clear input and show initial success message
         linkInput = ""
         feedbackMessage = "已保存 \(urls.count) 个链接"
         isError = false
@@ -371,6 +374,49 @@ struct ContentView: View {
         
         // Clear pending links
         pendingSavedLinks = []
+        
+        // Preheat resources if enabled
+        guard preheatResources else { return }
+        
+        let validUrls = urls.compactMap { URL(string: $0) }
+        guard !validUrls.isEmpty else { return }
+        
+        isDownloading = true
+        feedbackMessage = "正在预热资源..."
+        
+        let result = await PreheatManager.shared.preheatResources(
+            urls: validUrls,
+            downloaderType: selectedDownloader,
+            onProgress: { progress in
+                Task { @MainActor in
+                    feedbackMessage = progress.message
+                    isError = progress.isError
+                    isDownloading = !progress.isError
+                }
+            }
+        )
+        
+        // Handle preheat result
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 100_000_000)
+            switch result {
+            case .success(let cachedUrls):
+                // Store cached URLs to saved link items
+                for url in urls {
+                    if let item = SavedLinksManager.shared.visibleItems.first(where: { $0.url == url }) {
+                        SavedLinksManager.shared.updateCachedUrls(for: item, cachedUrls: cachedUrls)
+                    }
+                }
+                feedbackMessage = "已保存 \(urls.count) 个链接，预热成功（缓存 \(cachedUrls.count) 个资源）"
+                isError = false
+                isWarning = false
+                isDownloading = false
+            case .failure(let error):
+                feedbackMessage = error
+                isError = true
+                isDownloading = false
+            }
+        }
     }
 }
 

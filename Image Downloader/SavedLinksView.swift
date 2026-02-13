@@ -207,7 +207,8 @@ struct SavedLinksView: View {
                 // or we could show it somewhere else, but global progress is likely enough)
                 let result = await DownloadManager.shared.downloadMedia(
                     urls: [url],
-                    downloaderType: type
+                    downloaderType: type,
+                    cachedMediaUrls: item.cachedUrls
                 ) { _ in }
                 
                 // Update status
@@ -481,7 +482,8 @@ struct SavedLinkItemRow: View {
             
             let result = await DownloadManager.shared.downloadMedia(
                 urls: [url],
-                downloaderType: type
+                downloaderType: type,
+                cachedMediaUrls: item.cachedUrls
             ) { progress in
                 Task { @MainActor in
                     withAnimation {

@@ -57,11 +57,13 @@ class DownloadManager: ObservableObject {
     // - Parameters:
     //   - urls: 待下载的 URL 列表
     //   - downloaderType: 下载器类型
+    //   - cachedMediaUrls: 已缓存的媒体资源链接, 若存在则优先使用
     //   - onProgress: 进度回调
     // - Returns: 下载结果
     func downloadMedia(
         urls: [URL],
         downloaderType: ImageDownloaderType,
+        cachedMediaUrls: [String]? = nil,
         onProgress: @escaping (DownloadProgress) -> Void
     ) async -> DownloadResult {
         
@@ -90,8 +92,16 @@ class DownloadManager: ObservableObject {
             
             // 发起网络请求
             do {
-                // 向服务端发起提取图片或视频 URLs 的请求
-                let mediaUrls = try await fetchMediaUrls(url: url, downloaderType: downloaderType)
+                let mediaUrls: [Any]
+                
+                // 优先使用预热缓存
+                if let cachedMediaUrls = cachedMediaUrls, !cachedMediaUrls.isEmpty {
+                    logInfo("[\(currentLine) / \(urls.count)] 使用预热缓存的 \(cachedMediaUrls.count) 个资源链接")
+                    mediaUrls = cachedMediaUrls
+                } else {
+                    // 向服务端发起提取图片或视频 URLs 的请求
+                    mediaUrls = try await fetchMediaUrls(url: url, downloaderType: downloaderType)
+                }
                 
                 if mediaUrls.isEmpty {
                     onProgress(DownloadProgress(

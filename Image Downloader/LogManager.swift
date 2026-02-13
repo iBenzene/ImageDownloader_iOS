@@ -31,7 +31,7 @@ enum LogLevel: Int, Comparable, CaseIterable {
     var displayName: String {
         switch self {
         case .debug: return "调试"
-        case .info: return "标准"
+        case .info: return "信息"
         case .warn: return "警告"
         case .error: return "错误"
         }
