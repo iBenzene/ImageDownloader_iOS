@@ -45,6 +45,7 @@ class DownloadManager: ObservableObject {
     @AppStorage("serverSideProxy") private var serverSideProxy: Bool = false
     
     private let userAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    private let liveCachePrefix = "__LIVE_CACHE__"
     
     private init() {}
     
@@ -96,8 +97,18 @@ class DownloadManager: ObservableObject {
                 
                 // 优先使用预热缓存
                 if let cachedMediaUrls = cachedMediaUrls, !cachedMediaUrls.isEmpty {
-                    logInfo("[\(currentLine) / \(urls.count)] 使用预热缓存的 \(cachedMediaUrls.count) 个资源链接")
-                    mediaUrls = cachedMediaUrls
+                    if downloaderType == .xhsLiveImg {
+                        if let liveCachedUrls = decodeLiveCachedUrls(cachedMediaUrls), !liveCachedUrls.isEmpty {
+                            logInfo("[\(currentLine) / \(urls.count)] 使用预热缓存的 \(liveCachedUrls.count) 个实况资源链接")
+                            mediaUrls = liveCachedUrls.map { $0 }
+                        } else {
+                            logWarn("[\(currentLine) / \(urls.count)] 实况预热缓存格式无法解析, 回退实时解析")
+                            mediaUrls = try await fetchMediaUrls(url: url, downloaderType: downloaderType)
+                        }
+                    } else {
+                        logInfo("[\(currentLine) / \(urls.count)] 使用预热缓存的 \(cachedMediaUrls.count) 个资源链接")
+                        mediaUrls = cachedMediaUrls
+                    }
                 } else {
                     // 向服务端发起提取图片或视频 URLs 的请求
                     mediaUrls = try await fetchMediaUrls(url: url, downloaderType: downloaderType)
@@ -738,5 +749,30 @@ class DownloadManager: ObservableObject {
             await pauseBriefly()
             return false
         }
+    }
+    
+    private func decodeLiveCachedUrls(_ cachedUrls: [String]) -> [(String, String)]? {
+        var decodedUrls: [(String, String)] = []
+        
+        for cachedUrl in cachedUrls {
+            guard cachedUrl.hasPrefix(liveCachePrefix) else {
+                return nil
+            }
+            
+            let jsonString = String(cachedUrl.dropFirst(liveCachePrefix.count))
+            guard let data = jsonString.data(using: .utf8),
+                  let payload = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let cover = payload["cover"] as? String else {
+                return nil
+            }
+            
+            let video = payload["video"] as? String ?? ""
+            decodedUrls.append((
+                cover.replacingOccurrences(of: "\\u002F", with: "/"),
+                video.replacingOccurrences(of: "\\u002F", with: "/")
+            ))
+        }
+        
+        return decodedUrls
     }
 }

@@ -29,6 +29,7 @@ class PreheatManager: ObservableObject {
     @AppStorage("serverToken") private var serverToken: String = ""
     
     private let userAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    private let liveCachePrefix = "__LIVE_CACHE__"
     
     private init() {}
     
@@ -79,13 +80,11 @@ class PreheatManager: ObservableObject {
                 
                 // Collect cached URLs
                 for mediaUrl in mediaUrls {
-                    if let urlString = mediaUrl as? String {
+                    if downloaderType == .xhsLiveImg {
+                        guard let tuple = mediaUrl as? (String, String) else { continue }
+                        allCachedUrls.append(encodeLiveCachedUrl(cover: tuple.0, video: tuple.1))
+                    } else if let urlString = mediaUrl as? String {
                         allCachedUrls.append(urlString.replacingOccurrences(of: "\\u002F", with: "/"))
-                    } else if let tuple = mediaUrl as? (String, String) {
-                        allCachedUrls.append(tuple.0)
-                        if !tuple.1.isEmpty {
-                            allCachedUrls.append(tuple.1)
-                        }
                     }
                 }
                 
@@ -193,5 +192,19 @@ class PreheatManager: ObservableObject {
             
             return mediaArray
         }
+    }
+
+    private func encodeLiveCachedUrl(cover: String, video: String) -> String {
+        let payload: [String: String] = [
+            "cover": cover.replacingOccurrences(of: "\\u002F", with: "/"),
+            "video": video.replacingOccurrences(of: "\\u002F", with: "/")
+        ]
+        
+        guard let data = try? JSONSerialization.data(withJSONObject: payload),
+              let jsonString = String(data: data, encoding: .utf8) else {
+            return liveCachePrefix + "{\"cover\":\"\(cover)\",\"video\":\"\(video)\"}"
+        }
+        
+        return liveCachePrefix + jsonString
     }
 }
