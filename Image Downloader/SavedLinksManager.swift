@@ -20,7 +20,7 @@ struct SavedLinkItem: Identifiable, Codable, Equatable {
     let id: UUID
     let url: String
     var timestamp: Date
-    let downloaderType: String
+    var downloaderType: String
     var status: SavedLinkStatus
     
     // Sync Metadata
@@ -130,12 +130,21 @@ class SavedLinksManager: ObservableObject {
                 // Restore if deleted
                 if winner.isDeleted {
                     winner.isDeleted = false
+                    winner.cachedUrls = nil
+                    // winner.status = .none
                 }
                 
                 // Update metadata for the winner
                 winner.timestamp = Date()
                 winner.updatedAt = Date()
                 winner.isDirty = true
+                if winner.downloaderType != downloaderType {
+                    logInfo("Restoring deleted link: \(winner.downloaderType) -> \(downloaderType)")
+                    winner.downloaderType = downloaderType
+                    winner.status = .none
+                } else {
+                    logDebug("Restoring deleted link (same type): \(winner.downloaderType)")
+                }
                 
                 // Mark all OTHER matches as deleted (soft delete duplicates)
                 for index in matchingIndices where index != winnerIndex {
@@ -190,6 +199,8 @@ class SavedLinksManager: ObservableObject {
     func deleteItem(_ item: SavedLinkItem) {
         if let index = items.firstIndex(where: { $0.id == item.id }) {
             items[index].isDeleted = true
+            items[index].cachedUrls = nil
+            // items[index].status = .none
             items[index].updatedAt = Date()
             items[index].isDirty = true
             saveItems()
@@ -209,6 +220,8 @@ class SavedLinksManager: ObservableObject {
         for index in items.indices {
             if !items[index].isDeleted {
                 items[index].isDeleted = true
+                items[index].cachedUrls = nil
+                // items[index].status = .none
                 items[index].updatedAt = Date()
                 items[index].isDirty = true
             }
