@@ -104,7 +104,7 @@ class PreheatManager: ObservableObject {
                     message: errorMsg,
                     isError: true
                 ))
-                logError("[\(currentLine) / \(urls.count)] 预热过程发生错误: \(errorMsg)")
+                logError("[\(currentLine) / \(urls.count)] 预热过程发生错误: \(error)")
                 return .failure(error: errorMsg)
             }
         }
@@ -158,8 +158,11 @@ class PreheatManager: ObservableObject {
             // 尝试解析错误信息
             if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                let errorMessage = json["error"] as? String {
+                logError("服务端预热请求失败, HTTP 状态码: \(httpResponse.statusCode), 错误信息: \(errorMessage)")
                 throw NSError(domain: "BackendError", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: errorMessage])
             } else {
+                let responseString = String(data: data, encoding: .utf8) ?? "无法解析响应内容"
+                logError("服务端预热请求失败, HTTP 状态码: \(httpResponse.statusCode), 响应内容: \(responseString)")
                 throw URLError(.badServerResponse)
             }
         }

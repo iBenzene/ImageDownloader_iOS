@@ -141,6 +141,7 @@ class DownloadManager: ObservableObject {
                                 isError: true,
                                 isWarning: false
                             ))
+                            logError("[\(currentLine) / \(urls.count)] 提取的实况图片链接不是元组类型 (\(index + 1) / \(mediaUrls.count))")
                             return .failure(error: errorMsg)
                         }
                         
@@ -156,6 +157,7 @@ class DownloadManager: ObservableObject {
                                 isError: true,
                                 isWarning: false
                             ))
+                            logError("[\(currentLine) / \(urls.count)] 提取的实况封面链接不是合法的 URL (\(index + 1) / \(mediaUrls.count))")
                             return .failure(error: errorMsg)
                         }
                         
@@ -175,6 +177,7 @@ class DownloadManager: ObservableObject {
                                     isError: true,
                                     isWarning: false
                                 ))
+                                logError("[\(currentLine) / \(urls.count)] 提取实况视频链接失败: 提取的实况视频链接不是合法的 URL (\(index + 1) / \(mediaUrls.count))")
                                 return .failure(error: errorMsg)
                             }
                             videoUrl = validVideoUrl
@@ -227,7 +230,7 @@ class DownloadManager: ObservableObject {
                                     isSuccess: false,
                                     mediaCount: index
                                 )
-                                logError("[\(currentLine) / \(urls.count)] 实况图片保存失败（\(index + 1) / \(mediaUrls.count)）")
+                                logError("[\(currentLine) / \(urls.count)] 实况图片保存失败 (\(index + 1) / \(mediaUrls.count))")
                                 return .failure(error: "实况图片保存失败")
                             }
                         } catch {
@@ -249,6 +252,7 @@ class DownloadManager: ObservableObject {
                                 isSuccess: false,
                                 mediaCount: index
                             )
+                            logError("[\(currentLine) / \(urls.count)] 实况图片下载失败: \(error) (\(index + 1) / \(mediaUrls.count))")
                             return .failure(error: errorMsg)
                         }
                     } else {
@@ -264,6 +268,7 @@ class DownloadManager: ObservableObject {
                                 isError: true,
                                 isWarning: false
                             ))
+                            logError("[\(currentLine) / \(urls.count)] 提取的资源链接不是字符串类型 (\(index + 1) / \(mediaUrls.count))")
                             return .failure(error: errorMsg)
                         }
                         let decodedMediaUrlString = mediaUrlString.replacingOccurrences(of: "\\u002F", with: "/")
@@ -281,7 +286,7 @@ class DownloadManager: ObservableObject {
                             ))
                             
                             // Debug: 检查提取的链接
-                            logError("[\(currentLine) / \(urls.count)] 提取的链接无效: \(mediaUrl)（\(index + 1) / \(mediaUrls.count)）")
+                            logError("[\(currentLine) / \(urls.count)] 提取的链接无效: \(mediaUrl) (\(index + 1) / \(mediaUrls.count))")
                             return .failure(error: errorMsg)
                         }
                         
@@ -300,7 +305,13 @@ class DownloadManager: ObservableObject {
                             let (data, response) = try await URLSession.shared.data(from: decodedMediaUrl)
                             
                             // 检查有没有发生错误
-                            guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+                            guard let httpResponse = response as? HTTPURLResponse else {
+                                logError("[\(currentLine) / \(urls.count)] 下载响应错误: 响应不是 HTTPURLResponse (URL: \(decodedMediaUrl))")
+                                throw URLError(.badServerResponse)
+                            }
+                            
+                            if httpResponse.statusCode != 200 {
+                                logError("[\(currentLine) / \(urls.count)] 资源下载失败, HTTP 状态码: \(httpResponse.statusCode), URL: \(decodedMediaUrl)")
                                 throw URLError(.badServerResponse)
                             }
                             
@@ -322,7 +333,7 @@ class DownloadManager: ObservableObject {
                                         isSuccess: false,
                                         mediaCount: index
                                     )
-                                    logError("[\(currentLine) / \(urls.count)] 视频保存失败（\(index + 1) / \(mediaUrls.count)）")
+                                    logError("[\(currentLine) / \(urls.count)] 视频保存失败 (\(index + 1) / \(mediaUrls.count))")
                                     return .failure(error: "视频保存失败")
                                 }
                             default: // 图片下载器
@@ -342,7 +353,7 @@ class DownloadManager: ObservableObject {
                                         isSuccess: false,
                                         mediaCount: index
                                     )
-                                    logError("[\(currentLine) / \(urls.count)] 图片保存失败（\(index + 1) / \(mediaUrls.count)）")
+                                    logError("[\(currentLine) / \(urls.count)] 图片保存失败 (\(index + 1) / \(mediaUrls.count))")
                                     return .failure(error: "图片保存失败")
                                 }
                             }
@@ -365,6 +376,7 @@ class DownloadManager: ObservableObject {
                                 isSuccess: false,
                                 mediaCount: index
                             )
+                            logError("[\(currentLine) / \(urls.count)] 图片或视频下载失败: \(error) (\(index + 1) / \(mediaUrls.count))")
                             return .failure(error: errorMsg)
                         }
                     }
@@ -399,7 +411,7 @@ class DownloadManager: ObservableObject {
                     isSuccess: false,
                     mediaCount: 0
                 )
-                logError("[\(currentLine) / \(urls.count)] 下载过程发生错误: \(errorMsg)")
+                logError("[\(currentLine) / \(urls.count)] 下载过程发生错误: \(error)")
                 return .failure(error: errorMsg)
             }
         }
@@ -432,6 +444,7 @@ class DownloadManager: ObservableObject {
         ]
         
         guard let requestUrl = components?.url else {
+            logError("提取请求参数错误: 无法构建 URL")
             throw URLError(.badURL)
         }
         
@@ -447,6 +460,7 @@ class DownloadManager: ObservableObject {
         
         // 检查响应状态
         guard let httpResponse = response as? HTTPURLResponse else {
+            logError("提取请求响应错误: 响应不是 HTTPURLResponse")
             throw URLError(.badServerResponse)
         }
         
@@ -454,8 +468,11 @@ class DownloadManager: ObservableObject {
             // 尝试解析错误信息
             if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                let errorMessage = json["error"] as? String {
+                logError("服务端提取媒体链接失败, HTTP 状态码: \(httpResponse.statusCode), 错误信息: \(errorMessage)")
                 throw NSError(domain: "BackendError", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: errorMessage])
             } else {
+                let responseString = String(data: data, encoding: .utf8) ?? "无法解析响应内容"
+                logError("服务端提取媒体链接失败, HTTP 状态码: \(httpResponse.statusCode), 响应内容: \(responseString)")
                 throw URLError(.badServerResponse)
             }
         }
@@ -463,6 +480,7 @@ class DownloadManager: ObservableObject {
         // 解析 JSON 响应
         guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
               let mediaUrls = json["mediaUrls"] else {
+            logError("服务端提取响应解析失败: mediaUrls 字段缺失或格式错误")
             throw URLError(.cannotParseResponse)
         }
         
@@ -470,6 +488,7 @@ class DownloadManager: ObservableObject {
         if downloaderType == .xhsLiveImg { // 当前「实况图片下载器」只有小红书的这一个
             //「实况图片下载器」返回对象数组, 因为每个「实况图片」包含封面和视频两个部分
             guard let mediaArray = mediaUrls as? [[String: Any?]] else {
+                logError("「实况图片下载器」响应解析失败: 预期媒体项应为字典数组")
                 throw URLError(.cannotParseResponse)
             }
             
@@ -483,6 +502,7 @@ class DownloadManager: ObservableObject {
         } else {
             // 一般的下载器返回字符串数组
             guard let mediaArray = mediaUrls as? [String] else {
+                logError("下载器响应解析失败: 预期媒体项应为字符串数组")
                 throw URLError(.cannotParseResponse)
             }
             
@@ -509,6 +529,7 @@ class DownloadManager: ObservableObject {
                 isError: true,
                 isWarning: false
             ))
+            logError("[\(currentLine) / \(totalLines)] 图片数据无效 (\(currentIndex) / \(totalCount))")
             await pauseBriefly()
             return false
         }
@@ -536,6 +557,7 @@ class DownloadManager: ObservableObject {
                 isError: true,
                 isWarning: false
             ))
+            logError("[\(currentLine) / \(totalLines)] 图片保存失败: \(error) (\(currentIndex) / \(totalCount))")
             await pauseBriefly()
             return false
         }
@@ -564,6 +586,7 @@ class DownloadManager: ObservableObject {
                 isError: true,
                 isWarning: false
             ))
+            logError("[\(currentLine) / \(totalLines)] 写入临时视频文件失败: \(error) (\(currentIndex) / \(totalCount))")
             await pauseBriefly()
             return false
         }
@@ -573,10 +596,10 @@ class DownloadManager: ObservableObject {
                 // 清理临时文件
                 do {
                     try FileManager.default.removeItem(at: tempVideoUrl)
-                    logDebug("[\(currentLine) / \(totalLines)] 已删除临时视频文件: \(tempVideoUrl)（\(currentIndex) / \(totalCount)）") }
+                    logDebug("[\(currentLine) / \(totalLines)] 已删除临时视频文件: \(tempVideoUrl) (\(currentIndex) / \(totalCount))") }
                 catch {
                     // Debug
-                    logWarn("[\(currentLine) / \(totalLines)] 删除临时视频文件失败: \(error)（\(currentIndex) / \(totalCount)）")
+                    logWarn("[\(currentLine) / \(totalLines)] 删除临时视频文件失败: \(error) (\(currentIndex) / \(totalCount))")
                 }
             }
             try await PHPhotoLibrary.shared().performChanges {
@@ -602,6 +625,7 @@ class DownloadManager: ObservableObject {
                 isError: true,
                 isWarning: false
             ))
+            logError("[\(currentLine) / \(totalLines)] 视频保存失败: \(error) (\(currentIndex) / \(totalCount))")
             await pauseBriefly()
             return false
         }
@@ -642,6 +666,7 @@ class DownloadManager: ObservableObject {
                 isError: true,
                 isWarning: false
             ))
+            logError("[\(currentLine) / \(totalLines)] 写入临时封面文件失败: \(error) (\(currentIndex) / \(totalCount))")
             await pauseBriefly()
             return false
         }
@@ -659,6 +684,7 @@ class DownloadManager: ObservableObject {
                 isError: true,
                 isWarning: false
             ))
+            logError("[\(currentLine) / \(totalLines)] 写入临时视频文件失败: \(error) (\(currentIndex) / \(totalCount))")
             await pauseBriefly()
             return false
         }
@@ -668,10 +694,10 @@ class DownloadManager: ObservableObject {
                 do {
                     try FileManager.default.removeItem(at: tempCoverUrl)
                     try FileManager.default.removeItem(at: tempVideoUrl)
-                    logDebug("[\(currentLine) / \(totalLines)] 已删除临时文件: \(tempCoverUrl), \(tempVideoUrl)（\(currentIndex) / \(totalCount)）")
+                    logDebug("[\(currentLine) / \(totalLines)] 已删除临时文件: \(tempCoverUrl), \(tempVideoUrl) (\(currentIndex) / \(totalCount))")
                 } catch {
                     // Debug
-                    logWarn("[\(currentLine) / \(totalLines)] 删除临时文件失败: \(error)（\(currentIndex) / \(totalCount)）")
+                    logWarn("[\(currentLine) / \(totalLines)] 删除临时文件失败: \(error) (\(currentIndex) / \(totalCount))")
                 }
             }
             
@@ -708,6 +734,7 @@ class DownloadManager: ObservableObject {
                 isError: true,
                 isWarning: false
             ))
+            logError("[\(currentLine) / \(totalLines)] 实况图片保存失败: \(error) (\(currentIndex) / \(totalCount))")
             await pauseBriefly()
             return false
         }
