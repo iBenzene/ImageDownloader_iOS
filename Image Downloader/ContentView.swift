@@ -26,8 +26,8 @@ struct ContentView: View {
 
     @State private var selectedDownloader: ImageDownloaderType = .xhsImg
     
-    @AppStorage("backendUrl") private var backendUrl: String = ""
-    @AppStorage("backendToken") private var backendToken: String = ""
+    @AppStorage("serverUrl") private var serverUrl: String = ""
+    @AppStorage("serverToken") private var serverToken: String = ""
     
     var body: some View {
         NavigationStack {
@@ -247,7 +247,7 @@ struct ContentView: View {
             return
         }
         
-        if backendUrl.isEmpty {
+        if serverUrl.isEmpty {
             // 服务端地址未配置
             feedbackMessage = "请在设置中配置服务端地址"
             isError = true

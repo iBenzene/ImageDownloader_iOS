@@ -68,8 +68,8 @@ struct SavedLinkItemAPI: Codable {
 class SavedLinksSyncManager: ObservableObject {
     static let shared = SavedLinksSyncManager()
     
-    @AppStorage("backendUrl") private var backendUrl: String = ""
-    @AppStorage("backendToken") private var backendToken: String = ""
+    @AppStorage("serverUrl") private var serverUrl: String = ""
+    @AppStorage("serverToken") private var serverToken: String = ""
     
     private var isSyncing = false
     
@@ -77,7 +77,7 @@ class SavedLinksSyncManager: ObservableObject {
     
     func sync() async {
         guard !isSyncing else { return }
-        guard !backendUrl.isEmpty, !backendToken.isEmpty else {
+        guard !serverUrl.isEmpty, !serverToken.isEmpty else {
             logWarn("SavedLinks Sync skipped: Missing backend URL or Token")
             return
         }
@@ -92,7 +92,7 @@ class SavedLinksSyncManager: ObservableObject {
         
         let requestBody = SavedLinksSyncRequest(records: apiItems)
         
-        let baseUrl = backendUrl.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        let baseUrl = serverUrl.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         let endpoint = "\(baseUrl)/v1/saved-links/sync"
         
         guard var components = URLComponents(string: endpoint) else {
@@ -100,7 +100,7 @@ class SavedLinksSyncManager: ObservableObject {
             return
         }
         
-        var queryItems = [URLQueryItem(name: "token", value: backendToken)]
+        var queryItems = [URLQueryItem(name: "token", value: serverToken)]
         
         let incrementalSync = UserDefaults.standard.bool(forKey: "incrementalSync")
         if incrementalSync, let lastSynced = SavedLinksManager.shared.lastSyncedAt {

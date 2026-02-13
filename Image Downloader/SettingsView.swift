@@ -9,27 +9,32 @@
 import SwiftUI
 
 struct SettingsView: View {
-    @AppStorage("backendUrl") private var backendUrl: String = ""
-    @AppStorage("backendToken") private var backendToken: String = ""
+    @AppStorage("serverUrl") private var serverUrl: String = ""
+    @AppStorage("serverToken") private var serverToken: String = ""
     @AppStorage("saveLinksOnly") private var saveLinksOnly: Bool = false
     @AppStorage("incrementalSync") private var incrementalSync: Bool = true
+    @AppStorage("serverSideProxy") private var serverSideProxy: Bool = false
     @AppStorage("logDisplayLevel") private var logDisplayLevel: Int = 1
 
     var body: some View {
         List {
             Section(header: Text("服务端地址").textCase(nil), footer: Text("必须部署服务端才能使用下载功能。")) {
-                TextField("请输入服务端地址", text: $backendUrl)
+                TextField("请输入服务端地址", text: $serverUrl)
             }
 
             Section(header: Text("服务端令牌").textCase(nil), footer: Text("令牌必须与服务端中的设置保持一致。")) {
-                TextField("请输入服务端令牌", text: $backendToken)
+                TextField("请输入服务端令牌", text: $serverToken)
             }
             
-            Section(header: Text("收藏模式").textCase(nil), footer: Text("开启后，首页的「下载」按钮将被替换为「收藏」，仅提取并保存有效链接而不下载资源。")) {
+            Section(header: Text("网络").textCase(nil), footer: Text("开启「服务端代理」后，将由服务端代为下载资源。")) {
+                Toggle("服务端代理", isOn: $serverSideProxy)
+            }
+            
+            Section(header: Text("收藏模式").textCase(nil), footer: Text("开启「收藏模式」后，首页的「下载」按钮将被替换为「收藏」，仅提取并保存有效链接而不下载资源。")) {
                 Toggle("仅保存链接", isOn: $saveLinksOnly)
             }
 
-            Section(header: Text("同步").textCase(nil), footer: Text("开启增量同步将仅获取自上次同步以来的更新。为节约您的流量，建议保持开启状态。")) {
+            Section(header: Text("同步").textCase(nil), footer: Text("开启「增量同步」后，将仅获取自上次同步以来的更新。为节约您的流量，建议保持开启状态。")) {
                 Toggle("增量同步", isOn: $incrementalSync)
             }
             

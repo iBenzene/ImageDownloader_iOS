@@ -40,8 +40,9 @@ enum DownloadResult {
 class DownloadManager: ObservableObject {
     static let shared = DownloadManager()
     
-    @AppStorage("backendUrl") private var backendUrl: String = ""
-    @AppStorage("backendToken") private var backendToken: String = ""
+    @AppStorage("serverUrl") private var serverUrl: String = ""
+    @AppStorage("serverToken") private var serverToken: String = ""
+    @AppStorage("serverSideProxy") private var serverSideProxy: Bool = false
     
     private let userAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     
@@ -64,7 +65,7 @@ class DownloadManager: ObservableObject {
         onProgress: @escaping (DownloadProgress) -> Void
     ) async -> DownloadResult {
         
-        if backendUrl.isEmpty {
+        if serverUrl.isEmpty {
             // 服务端地址未配置
             logError("下载失败: 服务端地址未配置")
             return .failure(error: "请在设置中配置服务端地址")
@@ -399,20 +400,25 @@ class DownloadManager: ObservableObject {
     
     // 向服务端发起提取图片或视频 URLs 的请求
     private func fetchMediaUrls(url: URL, downloaderType: ImageDownloaderType) async throws -> [Any] {
-        guard !backendUrl.isEmpty else {
+        guard !serverUrl.isEmpty else {
             throw URLError(.badURL)
         }
         
         // 构建请求 URL
-        let baseUrl = backendUrl.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        let baseUrl = serverUrl.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         let endpoint = "\(baseUrl)/v1/extract"
-        let token = backendToken.isEmpty ? "default_token" : backendToken
+        let token = serverToken.isEmpty ? "default_token" : serverToken
+        
+        // Determine useProxy value
+        // Always use proxy for Pixiv, otherwise use user setting
+        let useProxy = (downloaderType == .pImg) ? true : serverSideProxy
         
         var components = URLComponents(string: endpoint)
         components?.queryItems = [
             URLQueryItem(name: "url", value: url.absoluteString),
             URLQueryItem(name: "downloader", value: downloaderType.rawValue),
-            URLQueryItem(name: "token", value: token)
+            URLQueryItem(name: "token", value: token),
+            URLQueryItem(name: "useProxy", value: String(useProxy))
         ]
         
         guard let requestUrl = components?.url else {
