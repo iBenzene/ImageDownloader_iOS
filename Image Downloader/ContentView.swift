@@ -282,6 +282,7 @@ struct ContentView: View {
             try? await Task.sleep(nanoseconds: 100_000_000)
             switch result {
             case .success(let mediaCount):
+                linkInput = ""
                 feedbackMessage = "下载完成，共保存 \(mediaCount) 个图片或视频"
                 isError = false
                 isWarning = false
@@ -364,25 +365,33 @@ struct ContentView: View {
     func saveLinks(_ urls: [String]) async {
         // Save all extracted URLs
         SavedLinksManager.shared.addLinks(urls: urls, downloaderType: selectedDownloader.rawValue)
-        
-        // Clear input and show initial success message
-        linkInput = ""
-        feedbackMessage = "已保存 \(urls.count) 个链接"
-        isError = false
-        isWarning = false
-        isDownloading = false
-        
+
         // Clear pending links
         pendingSavedLinks = []
         
-        // Preheat resources if enabled
-        guard preheatResources else { return }
+        // 仅收藏 (不预热) 时, 直接清空输入框
+        guard preheatResources else {
+            linkInput = ""
+            feedbackMessage = "已保存 \(urls.count) 个链接"
+            isError = false
+            isWarning = false
+            isDownloading = false
+            return
+        }
         
         let validUrls = urls.compactMap { URL(string: $0) }
-        guard !validUrls.isEmpty else { return }
+        guard !validUrls.isEmpty else {
+            feedbackMessage = "已保存 \(urls.count) 个链接，但没有可预热的有效链接"
+            isWarning = true
+            isError = false
+            isDownloading = false
+            return
+        }
         
         isDownloading = true
         feedbackMessage = "正在预热资源..."
+        isError = false
+        isWarning = false
         
         let result = await PreheatManager.shared.preheatResources(
             urls: validUrls,
@@ -407,6 +416,7 @@ struct ContentView: View {
                         SavedLinksManager.shared.updateCachedUrls(for: item, cachedUrls: cachedUrls)
                     }
                 }
+                linkInput = ""
                 feedbackMessage = "已保存 \(urls.count) 个链接，预热成功（缓存 \(cachedUrls.count) 个资源）"
                 isError = false
                 isWarning = false

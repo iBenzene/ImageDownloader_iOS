@@ -71,11 +71,11 @@ class PreheatManager: ObservableObject {
                     onProgress(PreheatProgress(
                         currentUrlIndex: currentLine,
                         totalUrlCount: urls.count,
-                        message: "【\(currentLine) / \(urls.count)】预热失败: 未提取到资源链接",
+                        message: "【\(currentLine) / \(urls.count)】未提取到图片或视频的链接",
                         isError: true
                     ))
-                    logError("[\(currentLine) / \(urls.count)] 预热失败: 未提取到资源链接, 原始 URL: \(url)")
-                    return .failure(error: "【\(currentLine) / \(urls.count)】预热失败: 未提取到资源链接")
+                    logError("[\(currentLine) / \(urls.count)] 未提取到图片或视频的链接, 原始 URL: \(url)")
+                    return .failure(error: "【\(currentLine) / \(urls.count)】未提取到图片或视频的链接")
                 }
                 
                 // Collect cached URLs
@@ -96,7 +96,7 @@ class PreheatManager: ObservableObject {
                 ))
                 
             } catch {
-                let errorMsg = "【\(currentLine) / \(urls.count)】预热失败: " + (error.localizedDescription.isEmpty ? "未知错误" : error.localizedDescription)
+                let errorMsg = "【\(currentLine) / \(urls.count) " + (error.localizedDescription.isEmpty ? "未知错误" : error.localizedDescription)
                 onProgress(PreheatProgress(
                     currentUrlIndex: currentLine,
                     totalUrlCount: urls.count,
