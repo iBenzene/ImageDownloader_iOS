@@ -111,7 +111,9 @@ class HistorySyncManager: ObservableObject {
         
         let incrementalSync = UserDefaults.standard.bool(forKey: "incrementalSync")
         if incrementalSync, let lastSynced = HistoryManager.shared.lastSyncedAt {
-            let encodedDate = ISO8601DateFormatter.string(from: lastSynced, timeZone: TimeZone(secondsFromGMT: 0)!, formatOptions: [.withInternetDateTime, .withFractionalSeconds])
+            // Apply a safety buffer of 180 seconds to account for clock drift between clients
+            let bufferedDate = lastSynced.addingTimeInterval(-180)
+            let encodedDate = ISO8601DateFormatter.string(from: bufferedDate, timeZone: TimeZone(secondsFromGMT: 0)!, formatOptions: [.withInternetDateTime, .withFractionalSeconds])
             queryItems.append(URLQueryItem(name: "since", value: encodedDate))
         } else if !incrementalSync {
             logDebug("Performing full history sync (Incremental sync disabled)")
