@@ -17,7 +17,10 @@ enum ImageDownloaderType: String, CaseIterable {
     case xhsVid = "小红书视频下载器"
     case mysImg = "米游社图片下载器"
     case wbImg = "微博图片下载器"
+    case bVid = "哔哩哔哩视频下载器"
     case pImg = "Pixiv 图片下载器"
+    case xImg = "Twitter (X) 图片下载器"
+    case xVid = "Twitter (X) 视频下载器"
 }
 
 // 下载进度
@@ -140,7 +143,7 @@ class DownloadManager: ObservableObject {
                 
                 // 根据提取的链接, 下载图片或视频, 并保存至相册
                 for (index, mediaUrl) in mediaUrls.enumerated() {
-                    if downloaderType == .xhsLiveImg {
+                    if downloaderType == .xhsLiveImg { // 实况图片下载器, 图片和视频都得下载
                         guard let mediaUrlTuple = mediaUrl as? (String, String) else {
                             let errorMsg = "【\(currentLine) / \(urls.count)】提取的实况图片链接不是元组类型（\(index + 1) / \(mediaUrls.count)）"
                             onProgress(DownloadProgress(
@@ -266,7 +269,7 @@ class DownloadManager: ObservableObject {
                             logError("[\(currentLine) / \(urls.count)] 实况图片下载失败: \(error) (\(index + 1) / \(mediaUrls.count))")
                             return .failure(error: errorMsg)
                         }
-                    } else {
+                    } else { // 只需下载单一资源
                         // 将 Unicode 编码 \u002F 替换为 /
                         guard let mediaUrlString = mediaUrl as? String else {
                             let errorMsg = "【\(currentLine) / \(urls.count)】提取的资源链接不是字符串类型（\(index + 1) / \(mediaUrls.count)）"
@@ -326,8 +329,9 @@ class DownloadManager: ObservableObject {
                                 throw URLError(.badServerResponse)
                             }
                             
-                            switch downloaderType {
-                            case .xhsVid: // 小红书视频下载器
+                            
+                            if downloaderType == .xhsVid || downloaderType == .bVid || downloaderType == .xVid { // 视频下载器
+                                // 将视频保存至相册
                                 // 将视频保存至相册
                                 let saveResult = await saveVideoToPhotoLibrary(
                                     videoData: data,
@@ -347,7 +351,7 @@ class DownloadManager: ObservableObject {
                                     logError("[\(currentLine) / \(urls.count)] 视频保存失败 (\(index + 1) / \(mediaUrls.count))")
                                     return .failure(error: "视频保存失败")
                                 }
-                            default: // 图片下载器
+                            } else { // 图片下载器
                                 // 将图片保存至相册
                                 let saveResult = await saveImageToPhotoLibrary(
                                     imageData: data,
@@ -443,8 +447,8 @@ class DownloadManager: ObservableObject {
         let token = serverToken.isEmpty ? "default_token" : serverToken
         
         // Determine useProxy value
-        // Always use proxy for Pixiv, otherwise use user setting
-        let useProxy = (downloaderType == .pImg) ? true : serverSideProxy
+        // Always use proxy for Pixiv and bilibili, otherwise use user setting
+        let useProxy = (downloaderType == .pImg || downloaderType == .bVid) ? true : serverSideProxy
         
         var components = URLComponents(string: endpoint)
         components?.queryItems = [

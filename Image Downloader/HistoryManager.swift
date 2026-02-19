@@ -268,8 +268,14 @@ extension HistoryItem {
             return "米游社"
         case "微博图片下载器":
             return "微博"
+        case "哔哩哔哩视频下载器":
+            return "哔哩哔哩"
         case "Pixiv 图片下载器":
             return "Pixiv"
+        case "Twitter (X) 图片下载器":
+            return "Twitter (X) 图片"
+        case "Twitter (X) 视频下载器":
+            return "Twitter (X) 视频"
         default:
             return downloaderType
         }
