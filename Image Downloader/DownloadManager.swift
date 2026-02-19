@@ -18,7 +18,8 @@ enum ImageDownloaderType: String, CaseIterable {
     case mysImg = "米游社图片下载器"
     case wbImg = "微博图片下载器"
     case bVid = "哔哩哔哩视频下载器"
-    case pImg = "Pixiv 图片下载器"
+    case pImg = "Pixiv 插画下载器"
+    case pUgoira = "Pixiv 动图下载器"
     case xImg = "Twitter (X) 图片下载器"
     case xVid = "Twitter (X) 视频下载器"
 }
@@ -330,7 +331,7 @@ class DownloadManager: ObservableObject {
                             }
                             
                             
-                            if downloaderType == .xhsVid || downloaderType == .bVid || downloaderType == .xVid { // 视频下载器
+                            if downloaderType == .xhsVid || downloaderType == .bVid || downloaderType == .xVid || downloaderType == .pUgoira { // 视频下载器
                                 // 将视频保存至相册
                                 // 将视频保存至相册
                                 let saveResult = await saveVideoToPhotoLibrary(
@@ -448,7 +449,7 @@ class DownloadManager: ObservableObject {
         
         // Determine useProxy value
         // Always use proxy for Pixiv and bilibili, otherwise use user setting
-        let useProxy = (downloaderType == .pImg || downloaderType == .bVid) ? true : serverSideProxy
+        let useProxy = (downloaderType == .pImg || downloaderType == .pUgoira || downloaderType == .bVid) ? true : serverSideProxy
         
         var components = URLComponents(string: endpoint)
         components?.queryItems = [
