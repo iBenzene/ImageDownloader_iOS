@@ -27,9 +27,6 @@ struct ContentView: View {
 
     @State private var selectedDownloader: ImageDownloaderType = .xhsImg
     
-    @AppStorage("serverUrl") private var serverUrl: String = ""
-    @AppStorage("serverToken") private var serverToken: String = ""
-    
     var body: some View {
         NavigationStack {
             VStack {
@@ -203,98 +200,63 @@ struct ContentView: View {
     
     // 执行下载操作
     func downloadButtonTapped() async {
-        var urls: [URL] = []
-        
-        if linkInput.isEmpty {
-            // 文本输入框为空
-            feedbackMessage = "请输入链接"
-            isError = true
-            return
-        }
-        let links = linkInput.components(separatedBy: "\n")
-        var line = 0
-        
-        for link in links {
-            line += 1
-            
-            if link.isEmpty {
-                // 处理空链接
-                continue
-            }
-            
-            let pattern = #"http[s]?://[^\s，]+"#
-            
-            if let match = link.range(of: pattern, options: .regularExpression) {
-                let validLink = String(link[match])
-                
-                guard let url = URL(string: validLink) else {
-                    // 处理无效的链接
-                    feedbackMessage = "请检查第 \(line) 行包含的链接是否有效"
-                    isError = true
-                    return
-                }
-                
-                urls.append(url)
-            } else {
-                // 不存在链接, 直接忽略该行
-                feedbackMessage = "第 \(line) 行不包含链接，跳过"
-                isWarning = true
-                continue
-            }
-        }
-        
-        if urls.isEmpty {
-            // 文本输入框内全为空行
-            feedbackMessage = "请输入链接"
-            isError = true
-            return
-        }
-        
-        if serverUrl.isEmpty {
-            // 服务端地址未配置
-            feedbackMessage = "请在设置中配置服务端地址"
-            isError = true
-            return
-        }
-        
-        isDownloading = true
-        isError = false
-        isWarning = false
-        
-        // 调用 DownloadManager 执行下载
-        let result = await DownloadManager.shared.downloadMedia(
-            urls: urls,
+        let result = await DownloadManager.shared.performDownload(
+            from: linkInput,
             downloaderType: selectedDownloader,
-            onProgress: { progress in
-                // 更新 UI 状态
-                Task { @MainActor in
-                    feedbackMessage = progress.message
-                    isError = progress.isError
-                    isWarning = progress.isWarning
-                    isDownloading = !progress.isError
-                }
+            invalidLineHandling: .skipWithWarning,
+            onProgress: { feedback in
+                applyFeedback(feedback)
             }
         )
         
-        // 处理最终结果
         Task { @MainActor in
-            // Must delay to ensure this runs after the last onProgress task
-            try? await Task.sleep(nanoseconds: 100_000_000)
-            switch result {
-            case .success(let mediaCount):
-                linkInput = ""
-                feedbackMessage = "下载完成，共保存 \(mediaCount) 个图片或视频"
-                isError = false
-                isWarning = false
-                isDownloading = false
-            case .failure(let error):
-                feedbackMessage = error
-                isError = true
-                isDownloading = false
-            }
+            applyWorkflowResult(result)
         }
     }
-    
+
+    private func applyFeedback(_ feedback: HomeWorkflowFeedback) {
+        feedbackMessage = feedback.message
+        isError = feedback.isError
+        isWarning = feedback.isWarning
+        isDownloading = feedback.isDownloading
+    }
+
+    private func applyWorkflowResult(_ result: HomeWorkflowResult) {
+        if result.shouldClearInput {
+            linkInput = ""
+        }
+
+        applyFeedback(result.feedback)
+    }
+
+    private func handleSavePreparation(_ preparation: HomeSavePreparation) async {
+        switch preparation {
+        case .ready(let urls):
+            await saveLinks(urls)
+        case .needsDuplicateConfirmation(let urls):
+            pendingSavedLinks = urls
+            showingDuplicateAlert = true
+        case .feedback(let feedback):
+            applyFeedback(feedback)
+        }
+    }
+
+    private func saveLinks(_ urls: [String]) async {
+        let result = await DownloadManager.shared.saveLinks(
+            urls,
+            downloaderType: selectedDownloader,
+            shouldPreheatResources: preheatResources,
+            onProgress: { feedback in
+                applyFeedback(feedback)
+            }
+        )
+
+        Task { @MainActor in
+            pendingSavedLinks = []
+            applyWorkflowResult(result)
+        }
+    }
+
     // 执行粘贴操作
     func pasteButtonTapped() {
         if let clipboardContent = UIPasteboard.general.string {
@@ -312,121 +274,7 @@ struct ContentView: View {
     
     // 执行收藏操作
     func saveLinksButtonTapped() async {
-        var savedUrls: [String] = []
-        
-        if linkInput.isEmpty {
-            feedbackMessage = "请输入链接"
-            isError = true
-            return
-        }
-        
-        let lines = linkInput.components(separatedBy: "\n")
-        var line = 0
-        
-        // Extract valid URLs from each line
-        let pattern = #"http[s]?://[^\s，]+"#
-        
-        for text in lines {
-            line += 1
-            
-            if text.isEmpty {
-                continue
-            }
-            
-            if let match = text.range(of: pattern, options: .regularExpression) {
-                let validLink = String(text[match])
-                savedUrls.append(validLink)
-            }
-        }
-        
-        if savedUrls.isEmpty {
-            feedbackMessage = "未找到有效链接"
-            isError = true
-            return
-        }
-        
-        // Check for duplicates (only active links)
-        let duplicates = savedUrls.filter { url in
-            SavedLinksManager.shared.hasActiveLink(url: url)
-        }
-        
-        if !duplicates.isEmpty {
-            // Found duplicates, ask user what to do
-            pendingSavedLinks = savedUrls
-            showingDuplicateAlert = true
-            return
-        }
-        
-        // No duplicates, save directly
-        await saveLinks(savedUrls)
-    }
-    
-    // Helper to actually save links and optionally preheat resources
-    func saveLinks(_ urls: [String]) async {
-        // Save all extracted URLs
-        SavedLinksManager.shared.addLinks(urls: urls, downloaderType: selectedDownloader.rawValue)
-
-        // Clear pending links
-        pendingSavedLinks = []
-        
-        // 仅收藏 (不预热) 时, 直接清空输入框
-        guard preheatResources else {
-            linkInput = ""
-            feedbackMessage = "已保存 \(urls.count) 个链接"
-            isError = false
-            isWarning = false
-            isDownloading = false
-            return
-        }
-        
-        let validUrls = urls.compactMap { URL(string: $0) }
-        guard !validUrls.isEmpty else {
-            feedbackMessage = "已保存 \(urls.count) 个链接，但没有可预热的有效链接"
-            isWarning = true
-            isError = false
-            isDownloading = false
-            return
-        }
-        
-        isDownloading = true
-        feedbackMessage = "正在预热资源..."
-        isError = false
-        isWarning = false
-        
-        let result = await PreheatManager.shared.preheatResources(
-            urls: validUrls,
-            downloaderType: selectedDownloader,
-            onProgress: { progress in
-                Task { @MainActor in
-                    feedbackMessage = progress.message
-                    isError = progress.isError
-                    isDownloading = !progress.isError
-                }
-            }
-        )
-        
-        // Handle preheat result
-        Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 100_000_000)
-            switch result {
-            case .success(let cachedUrls):
-                // Store cached URLs to saved link items
-                for url in urls {
-                    if let item = SavedLinksManager.shared.visibleItems.first(where: { $0.url == url }) {
-                        SavedLinksManager.shared.updateCachedUrls(for: item, cachedUrls: cachedUrls)
-                    }
-                }
-                linkInput = ""
-                feedbackMessage = "已保存 \(urls.count) 个链接，预热成功（缓存 \(cachedUrls.count) 个资源）"
-                isError = false
-                isWarning = false
-                isDownloading = false
-            case .failure(let error):
-                feedbackMessage = error
-                isError = true
-                isDownloading = false
-            }
-        }
+        await handleSavePreparation(DownloadManager.shared.prepareSaveLinks(from: linkInput))
     }
 }
 

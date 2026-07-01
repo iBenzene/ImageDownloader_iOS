@@ -41,14 +41,44 @@ enum DownloadResult {
     case failure(error: String)
 }
 
+struct HomeWorkflowFeedback {
+    let message: String?
+    let isError: Bool
+    let isWarning: Bool
+    let isDownloading: Bool
+}
+
+struct HomeWorkflowResult {
+    let shouldClearInput: Bool
+    let feedback: HomeWorkflowFeedback
+}
+
+enum HomeSavePreparation {
+    case ready([String])
+    case needsDuplicateConfirmation([String])
+    case feedback(HomeWorkflowFeedback)
+}
+
+enum HomeInvalidLineHandling {
+    case ignore
+    case skipWithWarning
+}
+
+private enum HomeUrlExtractionResult {
+    case success(urls: [String], warning: HomeWorkflowFeedback?)
+    case failure(HomeWorkflowFeedback)
+}
+
 class DownloadManager: ObservableObject {
     static let shared = DownloadManager()
     
     @AppStorage("serverUrl") private var serverUrl: String = ""
     @AppStorage("serverToken") private var serverToken: String = ""
     @AppStorage("serverSideProxy") private var serverSideProxy: Bool = false
+    @AppStorage(MacDownloadPreference.storageKey) private var macDownloadDirectoryPath: String = ""
+    @AppStorage("macSaveToPhotoLibrary") private var macSaveToPhotoLibrary: Bool = false
     
-    private let userAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    private let linkPattern = #"http[s]?://[^\s，]+"#
     private let liveCachePrefix = "__LIVE_CACHE__"
     
     private init() {}
@@ -56,6 +86,164 @@ class DownloadManager: ObservableObject {
     private func pauseBriefly() async {
         // 短暂暂停 1 秒
         try? await Task.sleep(nanoseconds: 1_000_000_000)
+    }
+
+    func performDownload(
+        from input: String,
+        downloaderType: ImageDownloaderType,
+        invalidLineHandling: HomeInvalidLineHandling,
+        onProgress: @escaping (HomeWorkflowFeedback) -> Void
+    ) async -> HomeWorkflowResult {
+        let extraction = extractUrlStrings(
+            from: input,
+            noMatchesMessage: "请输入链接",
+            invalidLineHandling: invalidLineHandling
+        )
+
+        guard case let .success(urlStrings, warning) = extraction else {
+            if case let .failure(feedback) = extraction {
+                return HomeWorkflowResult(shouldClearInput: false, feedback: feedback)
+            }
+
+            return HomeWorkflowResult(
+                shouldClearInput: false,
+                feedback: .error("请输入链接")
+            )
+        }
+
+        if let warning {
+            await MainActor.run {
+                onProgress(warning)
+            }
+        }
+
+        let urls = urlStrings.compactMap(URL.init(string:))
+        guard !urls.isEmpty else {
+            return HomeWorkflowResult(
+                shouldClearInput: false,
+                feedback: .error("请输入链接")
+            )
+        }
+
+        guard !serverUrl.isEmpty else {
+            return HomeWorkflowResult(
+                shouldClearInput: false,
+                feedback: .error("请在设置中配置服务端地址")
+            )
+        }
+
+        await MainActor.run {
+            onProgress(.downloading(message: nil))
+        }
+
+        let result = await downloadMedia(
+            urls: urls,
+            downloaderType: downloaderType,
+            onProgress: { progress in
+                Task { @MainActor in
+                    onProgress(.from(progress))
+                }
+            }
+        )
+
+        try? await Task.sleep(nanoseconds: 100_000_000)
+
+        switch result {
+        case .success(let mediaCount):
+            return HomeWorkflowResult(
+                shouldClearInput: true,
+                feedback: .success("下载完成，共保存 \(mediaCount) 个图片或视频")
+            )
+        case .failure(let error):
+            return HomeWorkflowResult(
+                shouldClearInput: false,
+                feedback: .error(error)
+            )
+        }
+    }
+
+    func prepareSaveLinks(from input: String) -> HomeSavePreparation {
+        let extraction = extractUrlStrings(
+            from: input,
+            noMatchesMessage: "未找到有效链接",
+            invalidLineHandling: .ignore
+        )
+
+        switch extraction {
+        case .success(let urls, _):
+            let duplicates = urls.filter { url in
+                SavedLinksManager.shared.hasActiveLink(url: url)
+            }
+
+            if duplicates.isEmpty {
+                return .ready(urls)
+            }
+
+            return .needsDuplicateConfirmation(urls)
+
+        case .failure(let feedback):
+            return .feedback(feedback)
+        }
+    }
+
+    func saveLinks(
+        _ urls: [String],
+        downloaderType: ImageDownloaderType,
+        shouldPreheatResources: Bool,
+        onProgress: @escaping (HomeWorkflowFeedback) -> Void
+    ) async -> HomeWorkflowResult {
+        SavedLinksManager.shared.addLinks(urls: urls, downloaderType: downloaderType.rawValue)
+
+        guard shouldPreheatResources else {
+            return HomeWorkflowResult(
+                shouldClearInput: true,
+                feedback: .success("已保存 \(urls.count) 个链接")
+            )
+        }
+
+        let validUrls = urls.compactMap(URL.init(string:))
+        guard !validUrls.isEmpty else {
+            return HomeWorkflowResult(
+                shouldClearInput: false,
+                feedback: .warning("已保存 \(urls.count) 个链接，但没有可预热的有效链接")
+            )
+        }
+
+        await MainActor.run {
+            onProgress(.downloading(message: "正在预热资源..."))
+        }
+
+        let result = await PreheatManager.shared.preheatResources(
+            urls: validUrls,
+            downloaderType: downloaderType,
+            onProgress: { progress in
+                Task { @MainActor in
+                    onProgress(.from(progress))
+                }
+            }
+        )
+
+        try? await Task.sleep(nanoseconds: 100_000_000)
+
+        switch result {
+        case .success(let cachedUrls):
+            for url in urls {
+                if let item = SavedLinksManager.shared.visibleItems.first(where: { $0.url == url }) {
+                    SavedLinksManager.shared.updateCachedUrls(for: item, cachedUrls: cachedUrls)
+                }
+            }
+
+            return HomeWorkflowResult(
+                shouldClearInput: true,
+                feedback: .success("已保存 \(urls.count) 个链接，预热成功（缓存 \(cachedUrls.count) 个资源）")
+            )
+
+        case .failure(let error):
+            return HomeWorkflowResult(
+                shouldClearInput: false,
+                feedback: .error(error)
+            )
+        }
     }
     
     // 执行下载操作
@@ -230,6 +418,8 @@ class DownloadManager: ObservableObject {
                             let saveResult = await saveLiveImageToPhotoLibrary(
                                 coverData: coverData,
                                 videoData: videoData,
+                                coverFileExtension: coverUrl.pathExtension,
+                                videoFileExtension: videoUrl?.pathExtension,
                                 currentLine: currentLine,
                                 totalLines: urls.count,
                                 currentIndex: index + 1,
@@ -336,6 +526,7 @@ class DownloadManager: ObservableObject {
                                 // 将视频保存至相册
                                 let saveResult = await saveVideoToPhotoLibrary(
                                     videoData: data,
+                                    preferredFileExtension: decodedMediaUrl.pathExtension,
                                     currentLine: currentLine,
                                     totalLines: urls.count,
                                     currentIndex: index + 1,
@@ -356,6 +547,7 @@ class DownloadManager: ObservableObject {
                                 // 将图片保存至相册
                                 let saveResult = await saveImageToPhotoLibrary(
                                     imageData: data,
+                                    preferredFileExtension: decodedMediaUrl.pathExtension,
                                     currentLine: currentLine,
                                     totalLines: urls.count,
                                     currentIndex: index + 1,
@@ -435,100 +627,61 @@ class DownloadManager: ObservableObject {
         logInfo("下载任务全部完成, 共下载 \(totalMediaDownloaded) 个媒体文件")
         return .success(mediaCount: totalMediaDownloaded)
     }
+
+    private func extractUrlStrings(
+        from input: String,
+        noMatchesMessage: String,
+        invalidLineHandling: HomeInvalidLineHandling
+    ) -> HomeUrlExtractionResult {
+        guard !input.isEmpty else {
+            return .failure(.error("请输入链接"))
+        }
+
+        var urls: [String] = []
+        var warning: HomeWorkflowFeedback?
+
+        for (index, text) in input.components(separatedBy: "\n").enumerated() {
+            guard !text.isEmpty else { continue }
+
+            if let match = text.range(of: linkPattern, options: .regularExpression) {
+                urls.append(String(text[match]))
+            } else {
+                switch invalidLineHandling {
+                case .ignore:
+                    continue
+                case .skipWithWarning:
+                    warning = .warning("第 \(index + 1) 行不包含链接，跳过")
+                }
+            }
+        }
+
+        guard !urls.isEmpty else {
+            return .failure(.error(noMatchesMessage))
+        }
+
+        return .success(urls: urls, warning: warning)
+    }
     
     // 向服务端发起提取图片或视频 URLs 的请求
     private func fetchMediaUrls(url: URL, downloaderType: ImageDownloaderType) async throws -> [Any] {
-        guard !serverUrl.isEmpty else {
-            throw URLError(.badURL)
-        }
-        
-        // 构建请求 URL
-        let baseUrl = serverUrl.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        let endpoint = "\(baseUrl)/v1/extract"
-        let token = serverToken.isEmpty ? "default_token" : serverToken
-        
-        // Determine useProxy value
         // Always use proxy for Pixiv and bilibili, otherwise use user setting
         let useProxy = (downloaderType == .pImg || downloaderType == .pUgoira || downloaderType == .bVid) ? true : serverSideProxy
-        
-        var components = URLComponents(string: endpoint)
-        components?.queryItems = [
-            URLQueryItem(name: "url", value: url.absoluteString),
-            URLQueryItem(name: "downloader", value: downloaderType.rawValue),
-            URLQueryItem(name: "token", value: token),
-            URLQueryItem(name: "useProxy", value: String(useProxy))
-        ]
-        
-        guard let requestUrl = components?.url else {
-            logError("提取请求参数错误: 无法构建 URL")
-            throw URLError(.badURL)
-        }
-        
-        // 创建网络请求
-        var request = URLRequest(url: requestUrl)
-        request.setValue(userAgent, forHTTPHeaderField: "User-Agent")
-        request.timeoutInterval = 300
 
-        logInfo("向 \(requestUrl) 发起解析请求")
-
-        // 发起请求
-        let (data, response) = try await URLSession.shared.data(for: request)
-        
-        // 检查响应状态
-        guard let httpResponse = response as? HTTPURLResponse else {
-            logError("提取请求响应错误: 响应不是 HTTPURLResponse")
-            throw URLError(.badServerResponse)
-        }
-        
-        if httpResponse.statusCode != 200 {
-            // 尝试解析错误信息
-            if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-               let errorMessage = json["error"] as? String {
-                logError("服务端提取媒体链接失败, HTTP 状态码: \(httpResponse.statusCode), 错误信息: \(errorMessage)")
-                throw NSError(domain: "BackendError", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: errorMessage])
-            } else {
-                let responseString = String(data: data, encoding: .utf8) ?? "无法解析响应内容"
-                logError("服务端提取媒体链接失败, HTTP 状态码: \(httpResponse.statusCode), 响应内容: \(responseString)")
-                throw URLError(.badServerResponse)
-            }
-        }
-        
-        // 解析 JSON 响应
-        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let mediaUrls = json["mediaUrls"] else {
-            logError("服务端提取响应解析失败: mediaUrls 字段缺失或格式错误")
-            throw URLError(.cannotParseResponse)
-        }
-        
-        // 根据下载器类型处理不同的数据格式
-        if downloaderType == .xhsLiveImg { // 当前「实况图片下载器」只有小红书的这一个
-            //「实况图片下载器」返回对象数组, 因为每个「实况图片」包含封面和视频两个部分
-            guard let mediaArray = mediaUrls as? [[String: Any?]] else {
-                logError("「实况图片下载器」响应解析失败: 预期媒体项应为字典数组")
-                throw URLError(.cannotParseResponse)
-            }
-            
-            return mediaArray.compactMap { item -> (String, String)? in
-                guard let cover = item["cover"] as? String else {
-                    return nil
-                }
-                let video = item["video"] as? String ?? ""
-                return (cover, video)
-            }
-        } else {
-            // 一般的下载器返回字符串数组
-            guard let mediaArray = mediaUrls as? [String] else {
-                logError("下载器响应解析失败: 预期媒体项应为字符串数组")
-                throw URLError(.cannotParseResponse)
-            }
-            
-            return mediaArray
-        }
+        return try await MediaExtractService.fetchMediaUrls(
+            url: url,
+            downloaderType: downloaderType,
+            serverUrl: serverUrl,
+            serverToken: serverToken,
+            useProxy: useProxy,
+            requestLogName: "解析",
+            failureLogName: "提取媒体链接"
+        )
     }
     
     // 将图片保存至相册
     private func saveImageToPhotoLibrary(
         imageData: Data,
+        preferredFileExtension: String? = nil,
         currentLine: Int,
         totalLines: Int,
         currentIndex: Int,
@@ -549,6 +702,223 @@ class DownloadManager: ObservableObject {
             await pauseBriefly()
             return false
         }
+
+        #if targetEnvironment(macCatalyst)
+        if macSaveToPhotoLibrary {
+            return await saveImageToSystemPhotoLibrary(
+                image: image,
+                currentLine: currentLine,
+                totalLines: totalLines,
+                currentIndex: currentIndex,
+                totalCount: totalCount,
+                onProgress: onProgress
+            )
+        }
+
+        do {
+            let savedUrl = try saveDownloadedFileToDownloads(
+                data: imageData,
+                preferredFileExtension: preferredFileExtension,
+                fallbackFileExtension: "jpg",
+                prefix: "image"
+            )
+            onProgress(DownloadProgress(
+                currentUrlIndex: currentLine,
+                totalUrlCount: totalLines,
+                currentMediaIndex: currentIndex,
+                totalMediaCount: totalCount,
+                message: "【\(currentLine) / \(totalLines)】图片已保存到下载文件夹：\(savedUrl.lastPathComponent)（\(currentIndex) / \(totalCount)）",
+                isError: false,
+                isWarning: false
+            ))
+            return true
+        } catch {
+            onProgress(DownloadProgress(
+                currentUrlIndex: currentLine,
+                totalUrlCount: totalLines,
+                currentMediaIndex: currentIndex,
+                totalMediaCount: totalCount,
+                message: "【\(currentLine) / \(totalLines)】图片保存失败: \(error.localizedDescription)（\(currentIndex) / \(totalCount)）",
+                isError: true,
+                isWarning: false
+            ))
+            logError("[\(currentLine) / \(totalLines)] 图片保存到下载文件夹失败: \(error) (\(currentIndex) / \(totalCount))")
+            await pauseBriefly()
+            return false
+        }
+        #else
+        return await saveImageToSystemPhotoLibrary(
+            image: image,
+            currentLine: currentLine,
+            totalLines: totalLines,
+            currentIndex: currentIndex,
+            totalCount: totalCount,
+            onProgress: onProgress
+        )
+        #endif
+    }
+    
+    // 将视频保存至相册
+    private func saveVideoToPhotoLibrary(
+        videoData: Data,
+        preferredFileExtension: String? = nil,
+        currentLine: Int,
+        totalLines: Int,
+        currentIndex: Int,
+        totalCount: Int,
+        onProgress: @escaping (DownloadProgress) -> Void
+    ) async -> Bool {
+        #if targetEnvironment(macCatalyst)
+        if macSaveToPhotoLibrary {
+            return await saveVideoToSystemPhotoLibrary(
+                videoData: videoData,
+                currentLine: currentLine,
+                totalLines: totalLines,
+                currentIndex: currentIndex,
+                totalCount: totalCount,
+                onProgress: onProgress
+            )
+        }
+
+        do {
+            let savedUrl = try saveDownloadedFileToDownloads(
+                data: videoData,
+                preferredFileExtension: preferredFileExtension,
+                fallbackFileExtension: "mp4",
+                prefix: "video"
+            )
+            onProgress(DownloadProgress(
+                currentUrlIndex: currentLine,
+                totalUrlCount: totalLines,
+                currentMediaIndex: currentIndex,
+                totalMediaCount: totalCount,
+                message: "【\(currentLine) / \(totalLines)】视频已保存到下载文件夹：\(savedUrl.lastPathComponent)（\(currentIndex) / \(totalCount)）",
+                isError: false,
+                isWarning: false
+            ))
+            return true
+        } catch {
+            onProgress(DownloadProgress(
+                currentUrlIndex: currentLine,
+                totalUrlCount: totalLines,
+                currentMediaIndex: currentIndex,
+                totalMediaCount: totalCount,
+                message: "【\(currentLine) / \(totalLines)】视频保存失败: \(error.localizedDescription)（\(currentIndex) / \(totalCount)）",
+                isError: true,
+                isWarning: false
+            ))
+            logError("[\(currentLine) / \(totalLines)] 视频保存到下载文件夹失败: \(error) (\(currentIndex) / \(totalCount))")
+            await pauseBriefly()
+            return false
+        }
+        #else
+        return await saveVideoToSystemPhotoLibrary(
+            videoData: videoData,
+            currentLine: currentLine,
+            totalLines: totalLines,
+            currentIndex: currentIndex,
+            totalCount: totalCount,
+            onProgress: onProgress
+        )
+        #endif
+    }
+    
+    // 将实况图片保存至相册
+    private func saveLiveImageToPhotoLibrary(
+        coverData: Data,
+        videoData: Data?,
+        coverFileExtension: String? = nil,
+        videoFileExtension: String? = nil,
+        currentLine: Int,
+        totalLines: Int,
+        currentIndex: Int,
+        totalCount: Int,
+        onProgress: @escaping (DownloadProgress) -> Void
+    ) async -> Bool {
+        guard let videoData = videoData else {
+            // 如果没有视频数据, 则当作普通图片保存
+            return await saveImageToPhotoLibrary(
+                imageData: coverData,
+                preferredFileExtension: coverFileExtension,
+                currentLine: currentLine,
+                totalLines: totalLines,
+                currentIndex: currentIndex,
+                totalCount: totalCount,
+                onProgress: onProgress
+            )
+        }
+
+        #if targetEnvironment(macCatalyst)
+        if macSaveToPhotoLibrary {
+            return await saveLiveImageToSystemPhotoLibrary(
+                coverData: coverData,
+                videoData: videoData,
+                currentLine: currentLine,
+                totalLines: totalLines,
+                currentIndex: currentIndex,
+                totalCount: totalCount,
+                onProgress: onProgress
+            )
+        }
+
+        do {
+            let coverUrl = try saveDownloadedFileToDownloads(
+                data: coverData,
+                preferredFileExtension: coverFileExtension,
+                fallbackFileExtension: "jpg",
+                prefix: "live-cover"
+            )
+            let videoUrl = try saveDownloadedFileToDownloads(
+                data: videoData,
+                preferredFileExtension: videoFileExtension,
+                fallbackFileExtension: "mp4",
+                prefix: "live-video"
+            )
+            onProgress(DownloadProgress(
+                currentUrlIndex: currentLine,
+                totalUrlCount: totalLines,
+                currentMediaIndex: currentIndex,
+                totalMediaCount: totalCount,
+                message: "【\(currentLine) / \(totalLines)】实况图片已保存到下载文件夹：\(coverUrl.lastPathComponent)、\(videoUrl.lastPathComponent)（\(currentIndex) / \(totalCount)）",
+                isError: false,
+                isWarning: false
+            ))
+            return true
+        } catch {
+            onProgress(DownloadProgress(
+                currentUrlIndex: currentLine,
+                totalUrlCount: totalLines,
+                currentMediaIndex: currentIndex,
+                totalMediaCount: totalCount,
+                message: "【\(currentLine) / \(totalLines)】实况图片保存失败: \(error.localizedDescription)（\(currentIndex) / \(totalCount)）",
+                isError: true,
+                isWarning: false
+            ))
+            logError("[\(currentLine) / \(totalLines)] 实况图片保存到下载文件夹失败: \(error) (\(currentIndex) / \(totalCount))")
+            await pauseBriefly()
+            return false
+        }
+        #else
+        return await saveLiveImageToSystemPhotoLibrary(
+            coverData: coverData,
+            videoData: videoData,
+            currentLine: currentLine,
+            totalLines: totalLines,
+            currentIndex: currentIndex,
+            totalCount: totalCount,
+            onProgress: onProgress
+        )
+        #endif
+    }
+
+    private func saveImageToSystemPhotoLibrary(
+        image: UIImage,
+        currentLine: Int,
+        totalLines: Int,
+        currentIndex: Int,
+        totalCount: Int,
+        onProgress: @escaping (DownloadProgress) -> Void
+    ) async -> Bool {
         do {
             try await PHPhotoLibrary.shared().performChanges {
                 PHAssetChangeRequest.creationRequestForAsset(from: image)
@@ -578,9 +948,8 @@ class DownloadManager: ObservableObject {
             return false
         }
     }
-    
-    // 将视频保存至相册
-    private func saveVideoToPhotoLibrary(
+
+    private func saveVideoToSystemPhotoLibrary(
         videoData: Data,
         currentLine: Int,
         totalLines: Int,
@@ -588,7 +957,6 @@ class DownloadManager: ObservableObject {
         totalCount: Int,
         onProgress: @escaping (DownloadProgress) -> Void
     ) async -> Bool {
-        // 将视频数据写入临时文件
         let tempVideoUrl = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("tempVideo.mp4")
         do {
             try videoData.write(to: tempVideoUrl)
@@ -606,15 +974,13 @@ class DownloadManager: ObservableObject {
             await pauseBriefly()
             return false
         }
-        
+
         do {
             defer {
-                // 清理临时文件
                 do {
                     try FileManager.default.removeItem(at: tempVideoUrl)
-                    logDebug("[\(currentLine) / \(totalLines)] 已删除临时视频文件: \(tempVideoUrl) (\(currentIndex) / \(totalCount))") }
-                catch {
-                    // Debug
+                    logDebug("[\(currentLine) / \(totalLines)] 已删除临时视频文件: \(tempVideoUrl) (\(currentIndex) / \(totalCount))")
+                } catch {
                     logWarn("[\(currentLine) / \(totalLines)] 删除临时视频文件失败: \(error) (\(currentIndex) / \(totalCount))")
                 }
             }
@@ -646,29 +1012,16 @@ class DownloadManager: ObservableObject {
             return false
         }
     }
-    
-    // 将实况图片保存至相册
-    private func saveLiveImageToPhotoLibrary(
+
+    private func saveLiveImageToSystemPhotoLibrary(
         coverData: Data,
-        videoData: Data?,
+        videoData: Data,
         currentLine: Int,
         totalLines: Int,
         currentIndex: Int,
         totalCount: Int,
         onProgress: @escaping (DownloadProgress) -> Void
     ) async -> Bool {
-        guard let videoData = videoData else {
-            // 如果没有视频数据, 则当作普通图片保存
-            return await saveImageToPhotoLibrary(
-                imageData: coverData,
-                currentLine: currentLine,
-                totalLines: totalLines,
-                currentIndex: currentIndex,
-                totalCount: totalCount,
-                onProgress: onProgress
-            )
-        }
-        
         let tempCoverUrl = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("tempCover.jpg")
         do {
             try coverData.write(to: tempCoverUrl)
@@ -686,7 +1039,7 @@ class DownloadManager: ObservableObject {
             await pauseBriefly()
             return false
         }
-        
+
         let tempVideoUrl = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("tempVideo.mp4")
         do {
             try videoData.write(to: tempVideoUrl)
@@ -704,7 +1057,7 @@ class DownloadManager: ObservableObject {
             await pauseBriefly()
             return false
         }
-        
+
         do {
             defer {
                 do {
@@ -712,24 +1065,25 @@ class DownloadManager: ObservableObject {
                     try FileManager.default.removeItem(at: tempVideoUrl)
                     logDebug("[\(currentLine) / \(totalLines)] 已删除临时文件: \(tempCoverUrl), \(tempVideoUrl) (\(currentIndex) / \(totalCount))")
                 } catch {
-                    // Debug
                     logWarn("[\(currentLine) / \(totalLines)] 删除临时文件失败: \(error) (\(currentIndex) / \(totalCount))")
                 }
             }
-            
-            // 将回调式的闭包转换为 async/await, 并调用 LivePhotoHelper 保存实况图片
+
             try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
                 let livePhotoHelper = LivePhotoHelper()
                 livePhotoHelper.saveLivePhoto(tempCoverUrl, videoUrl: tempVideoUrl) { success, error in
                     if success {
                         continuation.resume()
                     } else {
-                        continuation.resume(throwing: error ?? NSError(domain: "LivePhoto", code: -1,
-                                                               userInfo: [NSLocalizedDescriptionKey: "未知错误"]))
+                        continuation.resume(throwing: error ?? NSError(
+                            domain: "LivePhoto",
+                            code: -1,
+                            userInfo: [NSLocalizedDescriptionKey: "未知错误"]
+                        ))
                     }
                 }
             }
-            
+
             onProgress(DownloadProgress(
                 currentUrlIndex: currentLine,
                 totalUrlCount: totalLines,
@@ -755,6 +1109,40 @@ class DownloadManager: ObservableObject {
             return false
         }
     }
+
+    #if targetEnvironment(macCatalyst)
+    private func saveDownloadedFileToDownloads(
+        data: Data,
+        preferredFileExtension: String?,
+        fallbackFileExtension: String,
+        prefix: String
+    ) throws -> URL {
+        let fileExtension = normalizedFileExtension(
+            preferredFileExtension,
+            fallback: fallbackFileExtension
+        )
+        let downloadsUrl = MacDownloadPreference.resolvedDirectoryUrl(
+            preferredPath: macDownloadDirectoryPath
+        )
+        let fileName = "ImageDownloader-\(prefix)-\(Int(Date().timeIntervalSince1970))-\(UUID().uuidString.prefix(8)).\(fileExtension)"
+        let destinationUrl = downloadsUrl.appendingPathComponent(fileName)
+
+        try data.write(to: destinationUrl, options: .atomic)
+        logInfo("已保存文件到下载文件夹: \(destinationUrl.path)")
+        return destinationUrl
+    }
+
+    private func normalizedFileExtension(_ preferredFileExtension: String?, fallback: String) -> String {
+        let candidate = (preferredFileExtension ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "."))
+            .lowercased()
+        let allowedCharacters = CharacterSet.alphanumerics
+        let sanitized = String(candidate.unicodeScalars.filter { allowedCharacters.contains($0) })
+
+        return sanitized.isEmpty ? fallback : sanitized
+    }
+    #endif
     
     private func decodeLiveCachedUrls(_ cachedUrls: [String]) -> [(String, String)]? {
         var decodedUrls: [(String, String)] = []
@@ -779,5 +1167,61 @@ class DownloadManager: ObservableObject {
         }
         
         return decodedUrls
+    }
+}
+
+private extension HomeWorkflowFeedback {
+    static func success(_ message: String) -> HomeWorkflowFeedback {
+        HomeWorkflowFeedback(
+            message: message,
+            isError: false,
+            isWarning: false,
+            isDownloading: false
+        )
+    }
+
+    static func warning(_ message: String) -> HomeWorkflowFeedback {
+        HomeWorkflowFeedback(
+            message: message,
+            isError: false,
+            isWarning: true,
+            isDownloading: false
+        )
+    }
+
+    static func error(_ message: String) -> HomeWorkflowFeedback {
+        HomeWorkflowFeedback(
+            message: message,
+            isError: true,
+            isWarning: false,
+            isDownloading: false
+        )
+    }
+
+    static func downloading(message: String?) -> HomeWorkflowFeedback {
+        HomeWorkflowFeedback(
+            message: message,
+            isError: false,
+            isWarning: false,
+            isDownloading: true
+        )
+    }
+
+    static func from(_ progress: DownloadProgress) -> HomeWorkflowFeedback {
+        HomeWorkflowFeedback(
+            message: progress.message,
+            isError: progress.isError,
+            isWarning: progress.isWarning,
+            isDownloading: !progress.isError
+        )
+    }
+
+    static func from(_ progress: PreheatProgress) -> HomeWorkflowFeedback {
+        HomeWorkflowFeedback(
+            message: progress.message,
+            isError: progress.isError,
+            isWarning: false,
+            isDownloading: !progress.isError
+        )
     }
 }

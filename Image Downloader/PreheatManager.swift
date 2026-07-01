@@ -28,7 +28,6 @@ class PreheatManager: ObservableObject {
     @AppStorage("serverUrl") private var serverUrl: String = ""
     @AppStorage("serverToken") private var serverToken: String = ""
     
-    private let userAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     private let liveCachePrefix = "__LIVE_CACHE__"
     
     private init() {}
@@ -96,7 +95,7 @@ class PreheatManager: ObservableObject {
                 ))
                 
             } catch {
-                let errorMsg = "【\(currentLine) / \(urls.count) " + (error.localizedDescription.isEmpty ? "未知错误" : error.localizedDescription)
+                let errorMsg = "【\(currentLine) / \(urls.count)】" + (error.localizedDescription.isEmpty ? "未知错误" : error.localizedDescription)
                 onProgress(PreheatProgress(
                     currentUrlIndex: currentLine,
                     totalUrlCount: urls.count,
@@ -114,84 +113,15 @@ class PreheatManager: ObservableObject {
     
     // 向服务端发起提取资源 URLs 的请求 (强制 useProxy = true)
     private func fetchMediaUrls(url: URL, downloaderType: ImageDownloaderType) async throws -> [Any] {
-        guard !serverUrl.isEmpty else {
-            throw URLError(.badURL)
-        }
-        
-        // 构建请求 URL
-        let baseUrl = serverUrl.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        let endpoint = "\(baseUrl)/v1/extract"
-        let token = serverToken.isEmpty ? "default_token" : serverToken
-        
-        // 预热时始终使用代理, 使资源被缓存到 S3
-        let useProxy = true
-        
-        var components = URLComponents(string: endpoint)
-        components?.queryItems = [
-            URLQueryItem(name: "url", value: url.absoluteString),
-            URLQueryItem(name: "downloader", value: downloaderType.rawValue),
-            URLQueryItem(name: "token", value: token),
-            URLQueryItem(name: "useProxy", value: String(useProxy))
-        ]
-        
-        guard let requestUrl = components?.url else {
-            throw URLError(.badURL)
-        }
-        
-        // 创建网络请求
-        var request = URLRequest(url: requestUrl)
-        request.setValue(userAgent, forHTTPHeaderField: "User-Agent")
-        request.timeoutInterval = 300
-
-        logInfo("向 \(requestUrl) 发起预热请求")
-
-        // 发起请求
-        let (data, response) = try await URLSession.shared.data(for: request)
-        
-        // 检查响应状态
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw URLError(.badServerResponse)
-        }
-        
-        if httpResponse.statusCode != 200 {
-            // 尝试解析错误信息
-            if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-               let errorMessage = json["error"] as? String {
-                logError("服务端预热请求失败, HTTP 状态码: \(httpResponse.statusCode), 错误信息: \(errorMessage)")
-                throw NSError(domain: "BackendError", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: errorMessage])
-            } else {
-                let responseString = String(data: data, encoding: .utf8) ?? "无法解析响应内容"
-                logError("服务端预热请求失败, HTTP 状态码: \(httpResponse.statusCode), 响应内容: \(responseString)")
-                throw URLError(.badServerResponse)
-            }
-        }
-        
-        // 解析 JSON 响应
-        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let mediaUrls = json["mediaUrls"] else {
-            throw URLError(.cannotParseResponse)
-        }
-        
-        // 根据下载器类型处理不同的数据格式
-        if downloaderType == .xhsLiveImg {
-            guard let mediaArray = mediaUrls as? [[String: Any?]] else {
-                throw URLError(.cannotParseResponse)
-            }
-            
-            return mediaArray.compactMap { item -> (String, String)? in
-                guard let cover = item["cover"] as? String else {
-                    return nil
-                }
-                let video = item["video"] as? String ?? ""
-                return (cover, video)
-            }
-        } else {
-            guard let mediaArray = mediaUrls as? [String] else {
-                throw URLError(.cannotParseResponse)
-            }
-            
-            return mediaArray
-        }
+        try await MediaExtractService.fetchMediaUrls(
+            url: url,
+            downloaderType: downloaderType,
+            serverUrl: serverUrl,
+            serverToken: serverToken,
+            useProxy: true,
+            requestLogName: "预热",
+            failureLogName: "预热请求"
+        )
     }
 
     private func encodeLiveCachedUrl(cover: String, video: String) -> String {

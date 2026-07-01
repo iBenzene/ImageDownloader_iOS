@@ -34,12 +34,21 @@ struct LogsView: View {
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 if !logManager.logs.isEmpty {
+                    #if targetEnvironment(macCatalyst)
+                    MacToolbarCircleIconButton(
+                        systemName: "trash",
+                        tint: .red
+                    ) {
+                        showClearConfirmation = true
+                    }
+                    #else
                     Button(action: {
                         showClearConfirmation = true
                     }) {
                         Image(systemName: "trash")
                             .foregroundColor(.red)
                     }
+                    #endif
                 }
             }
         }

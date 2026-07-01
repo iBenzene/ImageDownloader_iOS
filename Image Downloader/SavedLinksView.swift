@@ -38,6 +38,48 @@ struct SavedLinksView: View {
         .navigationTitle("已收藏")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            #if targetEnvironment(macCatalyst)
+            ToolbarItem(placement: .navigationBarLeading) {
+                if !savedLinksManager.visibleItems.isEmpty {
+                    if isBatchDownloading {
+                        batchProgressView
+                    } else {
+                        MacToolbarCircleIconButton(
+                            systemName: "arrow.down",
+                            tint: Color("AccentColor"),
+                            isDisabled: savedLinksManager.visibleItems.allSatisfy { $0.status == .success },
+                            action: downloadAll
+                        )
+                    }
+                }
+            }
+            
+            ToolbarItem(placement: .navigationBarTrailing) {
+                if !savedLinksManager.visibleItems.isEmpty {
+                    HStack(spacing: 8) {
+                        Button(action: {
+                            Task { await SavedLinksSyncManager.shared.sync() }
+                        }) {
+                            Image(systemName: "arrow.triangle.2.circlepath")
+                                .foregroundColor(Color("AccentColor"))
+                                .macToolbarSymbolStyle()
+                        }
+                        .disabled(isBatchDownloading)
+                        
+                        Button(action: {
+                            showClearConfirmation = true
+                        }) {
+                            Image(systemName: "trash")
+                                .foregroundColor(.red)
+                                .macToolbarSymbolStyle()
+                        }
+                        .disabled(isBatchDownloading)
+                        .opacity(isBatchDownloading ? 0.5 : 1.0)
+                    }
+                    .padding(.horizontal, 2)
+                }
+            }
+            #else
             if #available(iOS 26, *) {
                 // iOS 26+: Use separate ToolbarItems with padding for alignment
                 
@@ -146,6 +188,7 @@ struct SavedLinksView: View {
                     }
                 }
             }
+            #endif
         }
         .alert("清空已收藏链接", isPresented: $showClearConfirmation) {
             Button("取消", role: .cancel) {}
@@ -163,6 +206,24 @@ struct SavedLinksView: View {
         .refreshable {
             await SavedLinksSyncManager.shared.sync()
         }
+    }
+    
+    private var batchProgressView: some View {
+        HStack(spacing: 8) {
+            ProgressView()
+                .scaleEffect(0.85)
+            Text("\(batchCurrent) / \(batchTotal)")
+                .font(.caption)
+                .monospacedDigit()
+                .foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 9)
+        .background(
+            Capsule()
+                .fill(Color(.secondarySystemBackground))
+                .shadow(color: .black.opacity(0.06), radius: 14, y: 6)
+        )
     }
     
     private func downloadAll() {
@@ -535,12 +596,12 @@ struct SavedLinkItemRow: View {
 struct SavedLinksView_Previews: PreviewProvider {
     static var previews: some View {
         Group {
-            NavigationView {
+            NavigationStack {
                 SavedLinksView()
             }
             .previewDisplayName("Light Mode")
             
-            NavigationView {
+            NavigationStack {
                 SavedLinksView()
             }
             .preferredColorScheme(.dark)

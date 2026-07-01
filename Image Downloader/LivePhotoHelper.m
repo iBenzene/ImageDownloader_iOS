@@ -26,6 +26,13 @@
     
     // 使用资源写入器处理静态封面和配套视频的元数据
     [self useAssetWriter:coverUrl oldVideoUrl:videoUrl identifier:identifier complete:^(BOOL success, NSString *newCoverPath, NSString *newVideoPath, NSError *error) {
+        if (!success) {
+            if (completion) {
+                completion(NO, error);
+            }
+            return;
+        }
+
         NSURL *coverUrl = [NSURL fileURLWithPath:newCoverPath];
         NSURL *videoUrl = [NSURL fileURLWithPath:newVideoPath];
         
@@ -64,14 +71,25 @@
     // 处理静态封面
     NSString *livePhotoName = [self getCurrentTime];
     NSString *newCoverUrl = [self createFile:[livePhotoName stringByAppendingString:@".jpg"]];
-    [self addMetadataToCover:oldCoverUrl newCoverUrl:newCoverUrl identifier:identifier];
+    NSError *coverError = nil;
+    if (![self addMetadataToCover:oldCoverUrl newCoverUrl:newCoverUrl identifier:identifier error:&coverError]) {
+        if (complete) complete(NO, nil, nil, coverError);
+        return;
+    }
     
     // 处理配套视频
-    NSString *newVideoUrl = [self createFile:[livePhotoName stringByAppendingString:@".mp4"]];
-    [self addMetadataToVideo:oldVideoUrl newVideoUrl:newVideoUrl identifier:identifier];
+    NSString *newVideoUrl = [self createFile:[livePhotoName stringByAppendingString:@".mov"]];
+    NSError *videoError = nil;
+    if (![self addMetadataToVideo:oldVideoUrl newVideoUrl:newVideoUrl identifier:identifier error:&videoError]) {
+        if (complete) complete(NO, nil, nil, videoError);
+        return;
+    }
     
     // 确保资源组存在
-    if (!self.group) return;
+    if (!self.group) {
+        if (complete) complete(NO, nil, nil, [self livePhotoErrorWithDescription:@"视频写入器未能创建有效的写入任务"]);
+        return;
+    }
     dispatch_group_notify(self.group, dispatch_get_main_queue(), ^{
         [self finishWritingTracksWithCover:newCoverUrl videoUrl:newVideoUrl complete:complete];
     });
@@ -94,15 +112,41 @@
  * @param newCoverUrl   输出封面的 URL
  * @param identifier    唯一标识符
  */
-- (void)addMetadataToCover:(NSURL *)oldCoverUrl newCoverUrl:(NSString *)newCoverUrl identifier:(NSString *)identifier {
-    NSMutableData *data = [NSData dataWithContentsOfURL:oldCoverUrl].mutableCopy;
-    UIImage *image = [UIImage imageWithData:data];
+- (BOOL)addMetadataToCover:(NSURL *)oldCoverUrl newCoverUrl:(NSString *)newCoverUrl identifier:(NSString *)identifier error:(NSError **)error {
+    NSData *sourceData = [NSData dataWithContentsOfURL:oldCoverUrl];
+    if (!sourceData) {
+        if (error) *error = [self livePhotoErrorWithDescription:@"读取实况封面失败"];
+        return NO;
+    }
+
+    NSMutableData *data = [NSMutableData data];
+    UIImage *image = [UIImage imageWithData:sourceData];
+    if (!image.CGImage) {
+        if (error) *error = [self livePhotoErrorWithDescription:@"实况封面不是有效图片"];
+        return NO;
+    }
+
     CGImageRef imageRef = image.CGImage;
     NSDictionary *imageMetadata = @{(NSString *)kCGImagePropertyMakerAppleDictionary : @{@"17" : identifier}};
     CGImageDestinationRef dest = CGImageDestinationCreateWithData((CFMutableDataRef)data, (__bridge CFStringRef)UTTypeJPEG.identifier, 1, nil);
+    if (!dest) {
+        if (error) *error = [self livePhotoErrorWithDescription:@"创建实况封面写入器失败"];
+        return NO;
+    }
+
     CGImageDestinationAddImage(dest, imageRef, (CFDictionaryRef)imageMetadata);
-    CGImageDestinationFinalize(dest);
-    [data writeToFile:newCoverUrl atomically:YES];
+    BOOL finalized = CGImageDestinationFinalize(dest);
+    CFRelease(dest);
+    if (!finalized) {
+        if (error) *error = [self livePhotoErrorWithDescription:@"写入实况封面元数据失败"];
+        return NO;
+    }
+
+    if (![data writeToFile:newCoverUrl options:NSDataWritingAtomic error:error]) {
+        return NO;
+    }
+
+    return YES;
 }
 
 /**
@@ -112,7 +156,7 @@
  * @param identifier    唯一标识符
  */
 
-- (void)addMetadataToVideo:(NSURL *)oldVideoUrl newVideoUrl:(NSString *)newVideoUrl identifier:(NSString *)identifier {
+- (BOOL)addMetadataToVideo:(NSURL *)oldVideoUrl newVideoUrl:(NSString *)newVideoUrl identifier:(NSString *)identifier error:(NSError **)outError {
     NSError *error = nil;
     
     // 创建视频数据读取管理器
@@ -120,7 +164,8 @@
     AVAssetReader *reader = [AVAssetReader assetReaderWithAsset:asset error:&error];
     if (error) {
         NSLog(@"⚠️ Init reader error: %@", error);
-        return;
+        if (outError) *outError = error;
+        return NO;
     }
     NSMutableArray<AVMetadataItem *> *metadata = asset.metadata.mutableCopy;
     AVMetadataItem *item = [self createContentIdentifierMetadataItem:identifier];
@@ -132,7 +177,8 @@
     AVAssetWriter *writer = [AVAssetWriter assetWriterWithURL:videoFileURL fileType:AVFileTypeQuickTimeMovie error:&error];
     if (error) {
         NSLog(@"⚠️ Init writer error: %@", error);
-        return;
+        if (outError) *outError = error;
+        return NO;
     }
     [writer setMetadata:metadata];
     
@@ -163,9 +209,16 @@
         [writer addInput:input];
     }
     
-    [writer startWriting];
+    if (![writer startWriting]) {
+        if (outError) *outError = writer.error ?: [self livePhotoErrorWithDescription:@"启动实况视频写入失败"];
+        return NO;
+    }
     [writer startSessionAtSourceTime:kCMTimeZero];
-    [reader startReading];
+    if (![reader startReading]) {
+        [writer cancelWriting];
+        if (outError) *outError = reader.error ?: [self livePhotoErrorWithDescription:@"启动实况视频读取失败"];
+        return NO;
+    }
     
     // 写入元数据轨道的元数据
     AVMetadataItem *timedItem = [self createStillImageTimeMetadataItem];
@@ -182,6 +235,8 @@
         dispatch_group_enter(self.group);
         [self writeTrack:i];
     }
+
+    return YES;
 }
 
 /**
@@ -233,7 +288,9 @@
 - (void)finishWritingTracksWithCover:(NSString *)coverUrl videoUrl:(NSString *)videoUrl complete:(void (^)(BOOL success, NSString *coverUrl, NSString *videoUrl, NSError *error))complete {
     [self.reader cancelReading];
     [self.writer finishWritingWithCompletionHandler:^{
-        if (complete) complete(YES, coverUrl, videoUrl, nil);
+        BOOL success = self.writer.status == AVAssetWriterStatusCompleted;
+        NSError *error = success ? nil : (self.writer.error ?: [self livePhotoErrorWithDescription:@"实况视频写入失败"]);
+        if (complete) complete(success, coverUrl, videoUrl, error);
     }];
 }
 
@@ -296,6 +353,12 @@
     if ([fm fileExistsAtPath:filePath]) {
         [fm removeItemAtPath:filePath error:nil];
     }
+}
+
+- (NSError *)livePhotoErrorWithDescription:(NSString *)description {
+    return [NSError errorWithDomain:@"LivePhotoHelper"
+                               code:-1
+                           userInfo:@{NSLocalizedDescriptionKey: description}];
 }
 
 @end

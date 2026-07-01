@@ -79,9 +79,11 @@ struct LivePhotoConverterView: View {
         .toolbar(.hidden, for: .tabBar)
         .onAppear {
             cleanupWorkDir() // 页面加载时清理一次缓存
+            #if !targetEnvironment(macCatalyst)
             if coverUrl == nil {
                 showCoverPicker = true // 进入页面时, 立即选择封面
             }
+            #endif
         }
         .onDisappear {
             // 页面退出时清理一次缓存

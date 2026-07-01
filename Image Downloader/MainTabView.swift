@@ -40,6 +40,9 @@ struct MainTabView: View {
     }
     
     var body: some View {
+        #if targetEnvironment(macCatalyst)
+        MacMainView()
+        #else
         TabView(selection: $selectedTab) {
             ContentView()
                 .tabItem {
@@ -49,7 +52,7 @@ struct MainTabView: View {
                 }
                 .tag(Tab.home)
             
-            NavigationView {
+            NavigationStack {
                 SavedLinksView()
             }
             .tabItem {
@@ -70,6 +73,7 @@ struct MainTabView: View {
             .tag(Tab.settings)
         }
         .tint(Color("AccentColor"))
+        #endif
     }
 }
 

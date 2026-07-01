@@ -51,6 +51,30 @@ struct HistoryView: View {
         .navigationTitle("下载记录")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            #if targetEnvironment(macCatalyst)
+            ToolbarItem(placement: .navigationBarTrailing) {
+                HStack(spacing: 8) {
+                    Button(action: {
+                        triggerSync()
+                    }) {
+                        Image(systemName: "arrow.triangle.2.circlepath")
+                            .foregroundColor(.accentColor)
+                            .macToolbarSymbolStyle()
+                    }
+                    
+                    if !historyManager.visibleItems.isEmpty {
+                        Button(action: {
+                            showClearConfirmation = true
+                        }) {
+                            Image(systemName: "trash")
+                                .foregroundColor(.red)
+                                .macToolbarSymbolStyle()
+                        }
+                    }
+                }
+                .padding(.horizontal, 2)
+            }
+            #else
             if #available(iOS 26, *) {
                 // iOS 26+: Use separate ToolbarItems for proper pill styling
                 
@@ -100,6 +124,7 @@ struct HistoryView: View {
                     }
                 }
             }
+            #endif
         }
         .toolbar(.hidden, for: .tabBar)
         .alert("清空下载记录", isPresented: $showClearConfirmation) {
