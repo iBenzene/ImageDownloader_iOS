@@ -226,16 +226,18 @@ class DownloadManager: ObservableObject {
         try? await Task.sleep(nanoseconds: 100_000_000)
 
         switch result {
-        case .success(let cachedUrls):
+        case .success(let cachedUrlsBySourceUrl, let cachedUrlCount):
             for url in urls {
-                if let item = SavedLinksManager.shared.visibleItems.first(where: { $0.url == url }) {
+                let cacheKey = URL(string: url)?.absoluteString ?? url
+                if let item = SavedLinksManager.shared.visibleItems.first(where: { $0.url == url }),
+                   let cachedUrls = cachedUrlsBySourceUrl[cacheKey] {
                     SavedLinksManager.shared.updateCachedUrls(for: item, cachedUrls: cachedUrls)
                 }
             }
 
             return HomeWorkflowResult(
                 shouldClearInput: true,
-                feedback: .success("已保存 \(urls.count) 个链接，预热成功（缓存 \(cachedUrls.count) 个资源）")
+                feedback: .success("已保存 \(urls.count) 个链接，预热成功（缓存 \(cachedUrlCount) 个资源）")
             )
 
         case .failure(let error):

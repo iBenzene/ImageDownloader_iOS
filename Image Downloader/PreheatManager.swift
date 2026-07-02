@@ -18,7 +18,7 @@ struct PreheatProgress {
 
 // 预热结果
 enum PreheatResult {
-    case success(cachedUrls: [String])
+    case success(cachedUrlsBySourceUrl: [String: [String]], cachedUrlCount: Int)
     case failure(error: String)
 }
 
@@ -51,7 +51,8 @@ class PreheatManager: ObservableObject {
         
         logInfo("开始预热 \(urls.count) 个链接 (\(downloaderType.rawValue))")
         
-        var allCachedUrls: [String] = []
+        var cachedUrlsBySourceUrl: [String: [String]] = [:]
+        var totalCachedUrlCount = 0
         
         for (urlIndex, url) in urls.enumerated() {
             let currentLine = urlIndex + 1
@@ -77,15 +78,20 @@ class PreheatManager: ObservableObject {
                     return .failure(error: "【\(currentLine) / \(urls.count)】未提取到图片或视频的链接")
                 }
                 
-                // Collect cached URLs
+                var cachedUrls: [String] = []
+
+                // Collect cached URLs for this source URL.
                 for mediaUrl in mediaUrls {
                     if downloaderType == .xhsLiveImg {
                         guard let tuple = mediaUrl as? (String, String) else { continue }
-                        allCachedUrls.append(encodeLiveCachedUrl(cover: tuple.0, video: tuple.1))
+                        cachedUrls.append(encodeLiveCachedUrl(cover: tuple.0, video: tuple.1))
                     } else if let urlString = mediaUrl as? String {
-                        allCachedUrls.append(urlString.replacingOccurrences(of: "\\u002F", with: "/"))
+                        cachedUrls.append(urlString.replacingOccurrences(of: "\\u002F", with: "/"))
                     }
                 }
+
+                cachedUrlsBySourceUrl[url.absoluteString] = cachedUrls
+                totalCachedUrlCount += cachedUrls.count
                 
                 onProgress(PreheatProgress(
                     currentUrlIndex: currentLine,
@@ -107,8 +113,8 @@ class PreheatManager: ObservableObject {
             }
         }
         
-        logInfo("预热任务全部完成, 共缓存 \(allCachedUrls.count) 个资源链接")
-        return .success(cachedUrls: allCachedUrls)
+        logInfo("预热任务全部完成, 共缓存 \(totalCachedUrlCount) 个资源链接")
+        return .success(cachedUrlsBySourceUrl: cachedUrlsBySourceUrl, cachedUrlCount: totalCachedUrlCount)
     }
     
     // 向服务端发起提取资源 URLs 的请求 (强制 useProxy = true)
