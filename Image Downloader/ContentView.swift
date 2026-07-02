@@ -21,6 +21,7 @@ struct ContentView: View {
     
     @State private var showingDuplicateAlert = false
     @State private var pendingSavedLinks: [String] = []
+    @State private var pendingSavedLinksDownloader: ImageDownloaderType?
     
     @AppStorage("saveLinksOnly") private var saveLinksOnly: Bool = false
     @AppStorage("preheatResources") private var preheatResources: Bool = false
@@ -139,15 +140,7 @@ struct ContentView: View {
                     .padding()
                     
                     Button(action: {
-                        Task {
-                            if saveLinksOnly {
-                                // 执行收藏操作的函数
-                                await saveLinksButtonTapped()
-                            } else {
-                                // 执行下载操作的函数
-                                await downloadButtonTapped()
-                            }
-                        }
+                        startPrimaryAction()
                     }) {
                         Text(saveLinksOnly ? "收藏" : "下载")
                             .foregroundColor(.white)
@@ -157,6 +150,8 @@ struct ContentView: View {
                             .background(Color("AccentColor"))
                             .cornerRadius(10)
                     }
+                    .disabled(isDownloading)
+                    .opacity(isDownloading ? 0.6 : 1)
                     .padding()
                     
                     Button(action: {
@@ -184,13 +179,14 @@ struct ContentView: View {
             .alert("重复链接提醒", isPresented: $showingDuplicateAlert) {
                 Button("取消", role: .cancel) {
                     pendingSavedLinks = []
+                    pendingSavedLinksDownloader = nil
                     feedbackMessage = "已取消收藏"
+                    isError = false
                     isWarning = true
+                    isDownloading = false
                 }
                 Button("继续") {
-                    Task {
-                        await saveLinks(pendingSavedLinks)
-                    }
+                    continueSavingPendingLinks()
                 }
             } message: {
                 Text("检测到收藏列表中已存在部分链接，是否继续收藏？")
@@ -198,11 +194,50 @@ struct ContentView: View {
         }
     }
     
+    @MainActor
+    private func startPrimaryAction() {
+        guard !isDownloading else { return }
+        
+        let input = linkInput
+        let downloaderType = selectedDownloader
+        let shouldSaveLinksOnly = saveLinksOnly
+        
+        feedbackMessage = shouldSaveLinksOnly ? "正在收藏..." : "准备下载..."
+        isError = false
+        isWarning = false
+        isDownloading = true
+        
+        Task {
+            if shouldSaveLinksOnly {
+                await saveLinksButtonTapped(input: input, downloaderType: downloaderType)
+            } else {
+                await downloadButtonTapped(input: input, downloaderType: downloaderType)
+            }
+        }
+    }
+    
+    @MainActor
+    private func continueSavingPendingLinks() {
+        guard !isDownloading else { return }
+        
+        let urls = pendingSavedLinks
+        let downloaderType = pendingSavedLinksDownloader ?? selectedDownloader
+        
+        feedbackMessage = "正在收藏..."
+        isError = false
+        isWarning = false
+        isDownloading = true
+        
+        Task {
+            await saveLinks(urls, downloaderType: downloaderType)
+        }
+    }
+    
     // 执行下载操作
-    func downloadButtonTapped() async {
+    func downloadButtonTapped(input: String, downloaderType: ImageDownloaderType) async {
         let result = await DownloadManager.shared.performDownload(
-            from: linkInput,
-            downloaderType: selectedDownloader,
+            from: input,
+            downloaderType: downloaderType,
             invalidLineHandling: .skipWithWarning,
             onProgress: { feedback in
                 applyFeedback(feedback)
@@ -229,22 +264,30 @@ struct ContentView: View {
         applyFeedback(result.feedback)
     }
 
-    private func handleSavePreparation(_ preparation: HomeSavePreparation) async {
+    private func handleSavePreparation(
+        _ preparation: HomeSavePreparation,
+        downloaderType: ImageDownloaderType
+    ) async {
         switch preparation {
         case .ready(let urls):
-            await saveLinks(urls)
+            await saveLinks(urls, downloaderType: downloaderType)
         case .needsDuplicateConfirmation(let urls):
             pendingSavedLinks = urls
+            pendingSavedLinksDownloader = downloaderType
             showingDuplicateAlert = true
+            feedbackMessage = "请确认是否继续收藏"
+            isError = false
+            isWarning = true
+            isDownloading = false
         case .feedback(let feedback):
             applyFeedback(feedback)
         }
     }
 
-    private func saveLinks(_ urls: [String]) async {
+    private func saveLinks(_ urls: [String], downloaderType: ImageDownloaderType) async {
         let result = await DownloadManager.shared.saveLinks(
             urls,
-            downloaderType: selectedDownloader,
+            downloaderType: downloaderType,
             shouldPreheatResources: preheatResources,
             onProgress: { feedback in
                 applyFeedback(feedback)
@@ -253,6 +296,7 @@ struct ContentView: View {
 
         Task { @MainActor in
             pendingSavedLinks = []
+            pendingSavedLinksDownloader = nil
             applyWorkflowResult(result)
         }
     }
@@ -273,8 +317,11 @@ struct ContentView: View {
     }
     
     // 执行收藏操作
-    func saveLinksButtonTapped() async {
-        await handleSavePreparation(DownloadManager.shared.prepareSaveLinks(from: linkInput))
+    func saveLinksButtonTapped(input: String, downloaderType: ImageDownloaderType) async {
+        await handleSavePreparation(
+            DownloadManager.shared.prepareSaveLinks(from: input),
+            downloaderType: downloaderType
+        )
     }
 }
 

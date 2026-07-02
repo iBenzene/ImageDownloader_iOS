@@ -12,6 +12,8 @@ struct MacMainView: View {
     @State private var selectedItem: MacSidebarItem? = .home
     @State private var detailPath = NavigationPath()
     @State private var homeState = MacHomeState()
+    @StateObject private var clipboardMonitor = MacClipboardMonitor()
+    @AppStorage("macClipboardListeningEnabled") private var clipboardListeningEnabled = false
     
     var body: some View {
         NavigationSplitView {
@@ -41,7 +43,10 @@ struct MacMainView: View {
             NavigationStack(path: $detailPath) {
                 switch selectedItem ?? .home {
                 case .home:
-                    MacHomeView(state: $homeState)
+                    MacHomeView(
+                        state: $homeState,
+                        isClipboardListening: clipboardListeningEnabled
+                    )
                 case .savedLinks:
                     SavedLinksView()
                 case .history:
@@ -56,6 +61,16 @@ struct MacMainView: View {
         .tint(Color("AccentColor"))
         .onChange(of: selectedItem) { _ in
             detailPath = NavigationPath()
+        }
+        .onAppear {
+            clipboardMonitor.setListening(clipboardListeningEnabled)
+        }
+        .onChange(of: clipboardListeningEnabled) { enabled in
+            clipboardMonitor.setListening(enabled)
+        }
+        .onChange(of: clipboardMonitor.recognizedTextRequest) { request in
+            guard let request else { return }
+            homeState.submitClipboardText(request.text)
         }
     }
 }

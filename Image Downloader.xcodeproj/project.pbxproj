@@ -10,8 +10,7 @@
 		4435AD7C2E4270F10000B654 /* LivePhotoConverterView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4435AD7B2E4270F10000B654 /* LivePhotoConverterView.swift */; };
 		444D10002F37F00100C0DE01 /* MacMainView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 444D10012F37F00100C0DE01 /* MacMainView.swift */; };
 		444D10022F37F00100C0DE01 /* MacHomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 444D10032F37F00100C0DE01 /* MacHomeView.swift */; };
-		44A120002F3F100100C0DE20 /* MacDownloadPreference.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44A120012F3F100100C0DE20 /* MacDownloadPreference.swift */; };
-		44C0DE122F3F000100C0DE12 /* MediaExtractService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44C0DE132F3F000100C0DE13 /* MediaExtractService.swift */; };
+		444D10042F40100100C0DE01 /* MacClipboardMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 444D10052F40100100C0DE01 /* MacClipboardMonitor.swift */; };
 		44520B6E2F363AEB00A7264A /* HistoryManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44520B6B2F363AEB00A7264A /* HistoryManager.swift */; };
 		44520B6F2F363AEB00A7264A /* MainTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44520B6C2F363AEB00A7264A /* MainTabView.swift */; };
 		44520B702F363AEB00A7264A /* HistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44520B6D2F363AEB00A7264A /* HistoryView.swift */; };
@@ -30,6 +29,8 @@
 		448857062B3AB4BA007B55EC /* Image_DownloaderUITestsLaunchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 448857052B3AB4BA007B55EC /* Image_DownloaderUITestsLaunchTests.swift */; };
 		4498BC902F37F8E100607D80 /* LogsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4498BC8F2F37F8E100607D80 /* LogsView.swift */; };
 		4498BC922F37F8F700607D80 /* LogManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4498BC912F37F8F700607D80 /* LogManager.swift */; };
+		44A120002F3F100100C0DE20 /* MacDownloadPreference.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44A120012F3F100100C0DE20 /* MacDownloadPreference.swift */; };
+		44C0DE122F3F000100C0DE12 /* MediaExtractService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44C0DE132F3F000100C0DE13 /* MediaExtractService.swift */; };
 		44FA6A8B2D32B1BB00D55A8E /* LivePhotoHelper.m in Sources */ = {isa = PBXBuildFile; fileRef = 44FA6A8A2D32B1BB00D55A8E /* LivePhotoHelper.m */; };
 		44FC11502C1B81DC00883582 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44FC114F2C1B81DC00883582 /* SettingsView.swift */; };
 /* End PBXBuildFile section */
@@ -57,8 +58,7 @@
 		4435AD7B2E4270F10000B654 /* LivePhotoConverterView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LivePhotoConverterView.swift; sourceTree = "<group>"; };
 		444D10012F37F00100C0DE01 /* MacMainView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacMainView.swift; sourceTree = "<group>"; };
 		444D10032F37F00100C0DE01 /* MacHomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacHomeView.swift; sourceTree = "<group>"; };
-		44A120012F3F100100C0DE20 /* MacDownloadPreference.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacDownloadPreference.swift; sourceTree = "<group>"; };
-		44C0DE132F3F000100C0DE13 /* MediaExtractService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaExtractService.swift; sourceTree = "<group>"; };
+		444D10052F40100100C0DE01 /* MacClipboardMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacClipboardMonitor.swift; sourceTree = "<group>"; };
 		44520B6B2F363AEB00A7264A /* HistoryManager.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = HistoryManager.swift; sourceTree = "<group>"; };
 		44520B6C2F363AEB00A7264A /* MainTabView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = MainTabView.swift; sourceTree = "<group>"; };
 		44520B6D2F363AEB00A7264A /* HistoryView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = HistoryView.swift; sourceTree = "<group>"; };
@@ -80,6 +80,8 @@
 		448857052B3AB4BA007B55EC /* Image_DownloaderUITestsLaunchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Image_DownloaderUITestsLaunchTests.swift; sourceTree = "<group>"; };
 		4498BC8F2F37F8E100607D80 /* LogsView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = LogsView.swift; sourceTree = "<group>"; };
 		4498BC912F37F8F700607D80 /* LogManager.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = LogManager.swift; sourceTree = "<group>"; };
+		44A120012F3F100100C0DE20 /* MacDownloadPreference.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacDownloadPreference.swift; sourceTree = "<group>"; };
+		44C0DE132F3F000100C0DE13 /* MediaExtractService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaExtractService.swift; sourceTree = "<group>"; };
 		44FA6A892D32B1BB00D55A8E /* LivePhotoHelper.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = LivePhotoHelper.h; sourceTree = "<group>"; };
 		44FA6A8A2D32B1BB00D55A8E /* LivePhotoHelper.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = LivePhotoHelper.m; sourceTree = "<group>"; };
 		44FC114D2C1B7C2200883582 /* Image-Downloader-Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = "Image-Downloader-Info.plist"; sourceTree = "<group>"; };
@@ -150,6 +152,7 @@
 				44520B6C2F363AEB00A7264A /* MainTabView.swift */,
 				444D10012F37F00100C0DE01 /* MacMainView.swift */,
 				444D10032F37F00100C0DE01 /* MacHomeView.swift */,
+				444D10052F40100100C0DE01 /* MacClipboardMonitor.swift */,
 				44520B722F368F0000A7264A /* SavedLinksManager.swift */,
 				44520B742F368F0000A7264A /* SavedLinksView.swift */,
 				44FA6A892D32B1BB00D55A8E /* LivePhotoHelper.h */,
@@ -341,6 +344,7 @@
 				44C0DE122F3F000100C0DE12 /* MediaExtractService.swift in Sources */,
 				444D10002F37F00100C0DE01 /* MacMainView.swift in Sources */,
 				444D10022F37F00100C0DE01 /* MacHomeView.swift in Sources */,
+				444D10042F40100100C0DE01 /* MacClipboardMonitor.swift in Sources */,
 				44FA6A8B2D32B1BB00D55A8E /* LivePhotoHelper.m in Sources */,
 				44520B6F2F363AEB00A7264A /* MainTabView.swift in Sources */,
 				4435AD7C2E4270F10000B654 /* LivePhotoConverterView.swift in Sources */,
@@ -523,7 +527,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 0.3.3;
+				MARKETING_VERSION = 0.3.4;
 				PRODUCT_BUNDLE_IDENTIFIER = com.ibenzene.ImageDownloader;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -565,7 +569,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 0.3.3;
+				MARKETING_VERSION = 0.3.4;
 				PRODUCT_BUNDLE_IDENTIFIER = com.ibenzene.ImageDownloader;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";

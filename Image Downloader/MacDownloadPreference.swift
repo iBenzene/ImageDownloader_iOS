@@ -2,7 +2,7 @@
 //  MacDownloadPreference.swift
 //  Image Downloader
 //
-//  Created by Codex on 2026/7/1.
+//  Created by 埃苯泽 on 2026/7/1.
 //
 
 import Foundation

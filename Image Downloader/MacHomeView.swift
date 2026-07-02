@@ -17,11 +17,30 @@ struct MacHomeState {
     var isDownloading = false
     var showingDuplicateAlert = false
     var pendingSavedLinks: [String] = []
+    var pendingSavedLinksDownloader: ImageDownloaderType?
     var selectedDownloader: ImageDownloaderType = .xhsImg
+    var pendingSubmitRequest: MacHomeSubmitRequest?
+
+    mutating func submitClipboardText(_ text: String) {
+        guard !isDownloading else { return }
+
+        if linkInput.isEmpty {
+            linkInput = text
+        } else {
+            linkInput += "\n" + text
+        }
+
+        pendingSubmitRequest = MacHomeSubmitRequest()
+    }
+}
+
+struct MacHomeSubmitRequest: Identifiable, Equatable {
+    let id = UUID()
 }
 
 struct MacHomeView: View {
     @Binding var state: MacHomeState
+    let isClipboardListening: Bool
     @State private var editorContentHeight: CGFloat = 0
     @State private var scrollOffset: CGFloat = 0
     
@@ -75,6 +94,10 @@ struct MacHomeView: View {
                 
                 scrollEdgeGlass
                 
+                if isClipboardListening {
+                    clipboardListeningCapsule
+                }
+                
                 bottomActionBar
             }
         }
@@ -103,16 +126,23 @@ struct MacHomeView: View {
         .alert("重复链接提醒", isPresented: $state.showingDuplicateAlert) {
             Button("取消", role: .cancel) {
                 state.pendingSavedLinks = []
+                state.pendingSavedLinksDownloader = nil
                 state.feedbackMessage = "已取消收藏"
+                state.isError = false
                 state.isWarning = true
+                state.isDownloading = false
             }
             Button("继续") {
-                Task {
-                    await saveLinks(state.pendingSavedLinks)
-                }
+                continueSavingPendingLinks()
             }
         } message: {
             Text("检测到收藏列表中已存在部分链接，是否继续收藏？")
+        }
+        .onChange(of: state.pendingSubmitRequest) { request in
+            guard request != nil else { return }
+
+            submitCurrentInput()
+            state.pendingSubmitRequest = nil
         }
     }
     
@@ -150,13 +180,7 @@ struct MacHomeView: View {
             }
             
             Button {
-                Task {
-                    if saveLinksOnly {
-                        await saveLinksButtonTapped()
-                    } else {
-                        await downloadButtonTapped()
-                    }
-                }
+                submitCurrentInput()
             } label: {
                 MacPrimaryActionButtonLabel(
                     title: saveLinksOnly ? "收藏" : "下载",
@@ -168,6 +192,21 @@ struct MacHomeView: View {
         }
         .padding(.horizontal, 32)
         .padding(.bottom, 24)
+    }
+
+    private var clipboardListeningCapsule: some View {
+        VStack {
+            HStack {
+                Spacer()
+
+                MacClipboardListeningCapsule()
+                    .padding(.top, 30)
+                    .padding(.trailing, 28)
+            }
+
+            Spacer()
+        }
+        .allowsHitTesting(false)
     }
     
     private var scrollEdgeGlass: some View {
@@ -211,10 +250,49 @@ struct MacHomeView: View {
         return .green
     }
     
-    private func downloadButtonTapped() async {
+    @MainActor
+    private func submitCurrentInput() {
+        guard !state.isDownloading else { return }
+        
+        let input = state.linkInput
+        let downloaderType = state.selectedDownloader
+        let shouldSaveLinksOnly = saveLinksOnly
+        
+        state.feedbackMessage = shouldSaveLinksOnly ? "正在收藏..." : "准备下载..."
+        state.isError = false
+        state.isWarning = false
+        state.isDownloading = true
+        
+        Task {
+            if shouldSaveLinksOnly {
+                await saveLinksButtonTapped(input: input, downloaderType: downloaderType)
+            } else {
+                await downloadButtonTapped(input: input, downloaderType: downloaderType)
+            }
+        }
+    }
+    
+    @MainActor
+    private func continueSavingPendingLinks() {
+        guard !state.isDownloading else { return }
+        
+        let urls = state.pendingSavedLinks
+        let downloaderType = state.pendingSavedLinksDownloader ?? state.selectedDownloader
+        
+        state.feedbackMessage = "正在收藏..."
+        state.isError = false
+        state.isWarning = false
+        state.isDownloading = true
+        
+        Task {
+            await saveLinks(urls, downloaderType: downloaderType)
+        }
+    }
+    
+    private func downloadButtonTapped(input: String, downloaderType: ImageDownloaderType) async {
         let result = await DownloadManager.shared.performDownload(
-            from: state.linkInput,
-            downloaderType: state.selectedDownloader,
+            from: input,
+            downloaderType: downloaderType,
             invalidLineHandling: .skipWithWarning,
             onProgress: { feedback in
                 applyFeedback(feedback)
@@ -226,8 +304,11 @@ struct MacHomeView: View {
         }
     }
     
-    private func saveLinksButtonTapped() async {
-        await handleSavePreparation(DownloadManager.shared.prepareSaveLinks(from: state.linkInput))
+    private func saveLinksButtonTapped(input: String, downloaderType: ImageDownloaderType) async {
+        await handleSavePreparation(
+            DownloadManager.shared.prepareSaveLinks(from: input),
+            downloaderType: downloaderType
+        )
     }
     
     private func applyFeedback(_ feedback: HomeWorkflowFeedback) {
@@ -245,22 +326,30 @@ struct MacHomeView: View {
         applyFeedback(result.feedback)
     }
 
-    private func handleSavePreparation(_ preparation: HomeSavePreparation) async {
+    private func handleSavePreparation(
+        _ preparation: HomeSavePreparation,
+        downloaderType: ImageDownloaderType
+    ) async {
         switch preparation {
         case .ready(let urls):
-            await saveLinks(urls)
+            await saveLinks(urls, downloaderType: downloaderType)
         case .needsDuplicateConfirmation(let urls):
             state.pendingSavedLinks = urls
+            state.pendingSavedLinksDownloader = downloaderType
             state.showingDuplicateAlert = true
+            state.feedbackMessage = "请确认是否继续收藏"
+            state.isError = false
+            state.isWarning = true
+            state.isDownloading = false
         case .feedback(let feedback):
             applyFeedback(feedback)
         }
     }
 
-    private func saveLinks(_ urls: [String]) async {
+    private func saveLinks(_ urls: [String], downloaderType: ImageDownloaderType) async {
         let result = await DownloadManager.shared.saveLinks(
             urls,
-            downloaderType: state.selectedDownloader,
+            downloaderType: downloaderType,
             shouldPreheatResources: preheatResources,
             onProgress: { feedback in
                 applyFeedback(feedback)
@@ -269,6 +358,7 @@ struct MacHomeView: View {
 
         Task { @MainActor in
             state.pendingSavedLinks = []
+            state.pendingSavedLinksDownloader = nil
             applyWorkflowResult(result)
         }
     }
@@ -306,6 +396,45 @@ private struct MacPrimaryActionButtonLabel: View {
         .contentShape(Capsule())
         .accessibilityLabel(title)
         .onHover { isHovered = $0 }
+    }
+}
+
+private struct MacClipboardListeningCapsule: View {
+    @State private var dotVisible = true
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Circle()
+                .fill(.red)
+                .frame(width: 8, height: 8)
+                .opacity(dotVisible ? 1 : 0.2)
+                .animation(
+                    .easeInOut(duration: 0.8).repeatForever(autoreverses: true),
+                    value: dotVisible
+                )
+
+            Text("正在监听剪贴板")
+                .font(.callout.weight(.medium))
+                .foregroundStyle(.primary)
+        }
+        .padding(.horizontal, 13)
+        .padding(.vertical, 8)
+        .background {
+            Capsule()
+                .fill(.ultraThinMaterial)
+                .overlay {
+                    Capsule()
+                        .stroke(.white.opacity(0.72), lineWidth: 0.8)
+                }
+                .overlay {
+                    Capsule()
+                        .stroke(.primary.opacity(0.08), lineWidth: 0.6)
+                }
+        }
+        .shadow(color: .black.opacity(0.08), radius: 14, y: 5)
+        .onAppear {
+            dotVisible = false
+        }
     }
 }
 

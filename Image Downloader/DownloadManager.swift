@@ -245,6 +245,18 @@ class DownloadManager: ObservableObject {
             )
         }
     }
+
+    func hasRecognizedLinks(in input: String) -> Bool {
+        if case .success = extractUrlStrings(
+            from: input,
+            noMatchesMessage: "未找到有效链接",
+            invalidLineHandling: .ignore
+        ) {
+            return true
+        }
+
+        return false
+    }
     
     // 执行下载操作
     // - Parameters:

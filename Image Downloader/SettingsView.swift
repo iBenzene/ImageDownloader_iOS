@@ -21,6 +21,7 @@ struct SettingsView: View {
     @AppStorage("logDisplayLevel") private var logDisplayLevel: Int = 1
     @AppStorage(MacDownloadPreference.storageKey) private var macDownloadDirectoryPath: String = ""
     @AppStorage("macSaveToPhotoLibrary") private var macSaveToPhotoLibrary: Bool = false
+    @AppStorage("macClipboardListeningEnabled") private var macClipboardListeningEnabled: Bool = false
     #if targetEnvironment(macCatalyst)
     @State private var isChoosingDownloadDirectory = false
     #endif
@@ -54,6 +55,15 @@ struct SettingsView: View {
                     .macSwitchToggleStyle()
                 }
             }
+
+            #if targetEnvironment(macCatalyst)
+            Section(header: Text("自动模式").textCase(nil), footer: Text("在「自动模式」下，运行期间会持续监听剪贴板的变化，当检测到有效链接时，会自动触发「下载」或「收藏」操作。")) {
+                Toggle(isOn: $macClipboardListeningEnabled) {
+                    SettingsRowLabel("监听剪贴板", systemImage: "doc.on.clipboard")
+                }
+                .macSwitchToggleStyle()
+            }
+            #endif
 
             Section(header: Text("同步").textCase(nil), footer: Text("开启「增量同步」后，将仅获取自上次同步以来的更新。为节约您的流量，建议保持开启状态。")) {
                 Toggle(isOn: $incrementalSync) {
