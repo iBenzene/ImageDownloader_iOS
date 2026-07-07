@@ -88,6 +88,20 @@ class DownloadManager: ObservableObject {
         try? await Task.sleep(nanoseconds: 1_000_000_000)
     }
 
+    private func deliverHomeWorkflowProgress(
+        _ feedback: HomeWorkflowFeedback,
+        onProgress: @escaping (HomeWorkflowFeedback) -> Void
+    ) {
+        // Keep progress delivery ordered with the final workflow result.
+        if Thread.isMainThread {
+            onProgress(feedback)
+        } else {
+            DispatchQueue.main.sync {
+                onProgress(feedback)
+            }
+        }
+    }
+
     func performDownload(
         from input: String,
         downloaderType: ImageDownloaderType,
@@ -112,9 +126,7 @@ class DownloadManager: ObservableObject {
         }
 
         if let warning {
-            await MainActor.run {
-                onProgress(warning)
-            }
+            deliverHomeWorkflowProgress(warning, onProgress: onProgress)
         }
 
         let urls = urlStrings.compactMap(URL.init(string:))
@@ -132,17 +144,13 @@ class DownloadManager: ObservableObject {
             )
         }
 
-        await MainActor.run {
-            onProgress(.downloading(message: nil))
-        }
+        deliverHomeWorkflowProgress(.downloading(message: nil), onProgress: onProgress)
 
         let result = await downloadMedia(
             urls: urls,
             downloaderType: downloaderType,
             onProgress: { progress in
-                Task { @MainActor in
-                    onProgress(.from(progress))
-                }
+                self.deliverHomeWorkflowProgress(.from(progress), onProgress: onProgress)
             }
         )
 
@@ -209,17 +217,13 @@ class DownloadManager: ObservableObject {
             )
         }
 
-        await MainActor.run {
-            onProgress(.downloading(message: "正在预热资源..."))
-        }
+        deliverHomeWorkflowProgress(.downloading(message: "正在预热资源..."), onProgress: onProgress)
 
         let result = await PreheatManager.shared.preheatResources(
             urls: validUrls,
             downloaderType: downloaderType,
             onProgress: { progress in
-                Task { @MainActor in
-                    onProgress(.from(progress))
-                }
+                self.deliverHomeWorkflowProgress(.from(progress), onProgress: onProgress)
             }
         )
 

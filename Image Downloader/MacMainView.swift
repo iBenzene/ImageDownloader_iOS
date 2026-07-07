@@ -14,6 +14,8 @@ struct MacMainView: View {
     @State private var homeState = MacHomeState()
     @StateObject private var clipboardMonitor = MacClipboardMonitor()
     @AppStorage("macClipboardListeningEnabled") private var clipboardListeningEnabled = false
+    @AppStorage("saveLinksOnly") private var saveLinksOnly = false
+    @AppStorage("preheatResources") private var preheatResources = false
     
     var body: some View {
         NavigationSplitView {
@@ -70,8 +72,48 @@ struct MacMainView: View {
         }
         .onChange(of: clipboardMonitor.recognizedTextRequest) { request in
             guard let request else { return }
-            homeState.submitClipboardText(request.text)
+            let shouldSubmitImmediately = homeState.appendClipboardText(request.text)
+            guard shouldSubmitImmediately else { return }
+
+            submitAccumulatedClipboardInput()
         }
+        .alert("重复链接提醒", isPresented: $homeState.showingDuplicateAlert) {
+            Button("取消", role: .cancel) {
+                homeState.pendingSavedLinks = []
+                homeState.pendingSavedLinksDownloader = nil
+                homeState.pendingSubmittedInput = nil
+                homeState.feedbackMessage = "已取消收藏"
+                homeState.isError = false
+                homeState.isWarning = true
+                homeState.isDownloading = false
+            }
+            Button("继续") {
+                MacHomeWorkflow.continueSavingPendingLinks(
+                    state: $homeState,
+                    preheatResources: preheatResources,
+                    onWorkflowFinished: submitAccumulatedClipboardInput
+                )
+            }
+        } message: {
+            Text("检测到收藏列表中已存在部分链接，是否继续收藏？")
+        }
+    }
+
+    @MainActor
+    private func submitAccumulatedClipboardInput() {
+        guard clipboardListeningEnabled,
+              !homeState.isDownloading,
+              !homeState.showingDuplicateAlert,
+              DownloadManager.shared.hasRecognizedLinks(in: homeState.linkInput) else {
+            return
+        }
+
+        MacHomeWorkflow.submitCurrentInput(
+            state: $homeState,
+            saveLinksOnly: saveLinksOnly,
+            preheatResources: preheatResources,
+            onWorkflowFinished: submitAccumulatedClipboardInput
+        )
     }
 }
 

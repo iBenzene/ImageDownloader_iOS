@@ -18,11 +18,13 @@ struct MacHomeState {
     var showingDuplicateAlert = false
     var pendingSavedLinks: [String] = []
     var pendingSavedLinksDownloader: ImageDownloaderType?
+    var pendingSubmittedInput: String?
     var selectedDownloader: ImageDownloaderType = .xhsImg
-    var pendingSubmitRequest: MacHomeSubmitRequest?
+    var activeWorkflowID: UUID?
 
-    mutating func submitClipboardText(_ text: String) {
-        guard !isDownloading else { return }
+    @discardableResult
+    mutating func appendClipboardText(_ text: String) -> Bool {
+        let shouldSubmitImmediately = !isDownloading && !showingDuplicateAlert
 
         if linkInput.isEmpty {
             linkInput = text
@@ -30,12 +32,263 @@ struct MacHomeState {
             linkInput += "\n" + text
         }
 
-        pendingSubmitRequest = MacHomeSubmitRequest()
+        return shouldSubmitImmediately
+    }
+
+    @discardableResult
+    mutating func removeSubmittedInput(_ submittedInput: String) -> Bool {
+        guard !submittedInput.isEmpty else { return false }
+
+        if linkInput == submittedInput {
+            linkInput = ""
+            return true
+        }
+
+        guard linkInput.hasPrefix(submittedInput) else { return false }
+
+        var remaining = String(linkInput.dropFirst(submittedInput.count))
+        while remaining.first == "\n" || remaining.first == "\r" {
+            remaining.removeFirst()
+        }
+
+        linkInput = remaining
+        return true
     }
 }
 
-struct MacHomeSubmitRequest: Identifiable, Equatable {
-    let id = UUID()
+enum MacHomeWorkflow {
+    @MainActor
+    static func submitCurrentInput(
+        state: Binding<MacHomeState>,
+        saveLinksOnly: Bool,
+        preheatResources: Bool,
+        onWorkflowFinished: @escaping @MainActor () -> Void = {}
+    ) {
+        guard !state.wrappedValue.isDownloading else { return }
+
+        let input = state.wrappedValue.linkInput
+        let downloaderType = state.wrappedValue.selectedDownloader
+        let workflowID = UUID()
+
+        state.wrappedValue.feedbackMessage = saveLinksOnly ? "正在收藏..." : "准备下载..."
+        state.wrappedValue.isError = false
+        state.wrappedValue.isWarning = false
+        state.wrappedValue.isDownloading = true
+        state.wrappedValue.activeWorkflowID = workflowID
+
+        Task { @MainActor in
+            if saveLinksOnly {
+                await saveLinksButtonTapped(
+                    input: input,
+                    downloaderType: downloaderType,
+                    state: state,
+                    workflowID: workflowID,
+                    submittedInput: input,
+                    preheatResources: preheatResources,
+                    onWorkflowFinished: onWorkflowFinished
+                )
+            } else {
+                await downloadButtonTapped(
+                    input: input,
+                    downloaderType: downloaderType,
+                    state: state,
+                    workflowID: workflowID,
+                    submittedInput: input,
+                    onWorkflowFinished: onWorkflowFinished
+                )
+            }
+        }
+    }
+
+    @MainActor
+    static func continueSavingPendingLinks(
+        state: Binding<MacHomeState>,
+        preheatResources: Bool,
+        onWorkflowFinished: @escaping @MainActor () -> Void = {}
+    ) {
+        guard !state.wrappedValue.isDownloading else { return }
+
+        let urls = state.wrappedValue.pendingSavedLinks
+        let downloaderType = state.wrappedValue.pendingSavedLinksDownloader ?? state.wrappedValue.selectedDownloader
+        let submittedInput = state.wrappedValue.pendingSubmittedInput ?? state.wrappedValue.linkInput
+        let workflowID = UUID()
+
+        state.wrappedValue.feedbackMessage = "正在收藏..."
+        state.wrappedValue.isError = false
+        state.wrappedValue.isWarning = false
+        state.wrappedValue.isDownloading = true
+        state.wrappedValue.activeWorkflowID = workflowID
+
+        Task { @MainActor in
+            await saveLinks(
+                urls,
+                downloaderType: downloaderType,
+                state: state,
+                workflowID: workflowID,
+                submittedInput: submittedInput,
+                preheatResources: preheatResources,
+                onWorkflowFinished: onWorkflowFinished
+            )
+        }
+    }
+
+    @MainActor
+    private static func downloadButtonTapped(
+        input: String,
+        downloaderType: ImageDownloaderType,
+        state: Binding<MacHomeState>,
+        workflowID: UUID,
+        submittedInput: String,
+        onWorkflowFinished: @escaping @MainActor () -> Void
+    ) async {
+        let result = await DownloadManager.shared.performDownload(
+            from: input,
+            downloaderType: downloaderType,
+            invalidLineHandling: .skipWithWarning,
+            onProgress: { feedback in
+                applyFeedback(feedback, state: state, workflowID: workflowID)
+            }
+        )
+
+        applyWorkflowResult(
+            result,
+            state: state,
+            workflowID: workflowID,
+            submittedInput: submittedInput,
+            onWorkflowFinished: onWorkflowFinished
+        )
+    }
+
+    @MainActor
+    private static func saveLinksButtonTapped(
+        input: String,
+        downloaderType: ImageDownloaderType,
+        state: Binding<MacHomeState>,
+        workflowID: UUID,
+        submittedInput: String,
+        preheatResources: Bool,
+        onWorkflowFinished: @escaping @MainActor () -> Void
+    ) async {
+        await handleSavePreparation(
+            DownloadManager.shared.prepareSaveLinks(from: input),
+            downloaderType: downloaderType,
+            state: state,
+            workflowID: workflowID,
+            submittedInput: submittedInput,
+            preheatResources: preheatResources,
+            onWorkflowFinished: onWorkflowFinished
+        )
+    }
+
+    private static func applyFeedback(
+        _ feedback: HomeWorkflowFeedback,
+        state: Binding<MacHomeState>,
+        workflowID: UUID
+    ) {
+        guard state.wrappedValue.activeWorkflowID == workflowID else { return }
+
+        state.wrappedValue.feedbackMessage = feedback.message
+        state.wrappedValue.isError = feedback.isError
+        state.wrappedValue.isWarning = feedback.isWarning
+        state.wrappedValue.isDownloading = feedback.isDownloading
+    }
+
+    @MainActor
+    private static func applyWorkflowResult(
+        _ result: HomeWorkflowResult,
+        state: Binding<MacHomeState>,
+        workflowID: UUID,
+        submittedInput: String,
+        onWorkflowFinished: @escaping @MainActor () -> Void
+    ) {
+        guard state.wrappedValue.activeWorkflowID == workflowID else { return }
+
+        let didRemoveSubmittedInput: Bool
+        if result.shouldClearInput {
+            didRemoveSubmittedInput = state.wrappedValue.removeSubmittedInput(submittedInput)
+        } else {
+            didRemoveSubmittedInput = false
+        }
+
+        applyFeedback(result.feedback, state: state, workflowID: workflowID)
+        state.wrappedValue.activeWorkflowID = nil
+
+        if didRemoveSubmittedInput {
+            onWorkflowFinished()
+        }
+    }
+
+    @MainActor
+    private static func handleSavePreparation(
+        _ preparation: HomeSavePreparation,
+        downloaderType: ImageDownloaderType,
+        state: Binding<MacHomeState>,
+        workflowID: UUID,
+        submittedInput: String,
+        preheatResources: Bool,
+        onWorkflowFinished: @escaping @MainActor () -> Void
+    ) async {
+        guard state.wrappedValue.activeWorkflowID == workflowID else { return }
+
+        switch preparation {
+        case .ready(let urls):
+            await saveLinks(
+                urls,
+                downloaderType: downloaderType,
+                state: state,
+                workflowID: workflowID,
+                submittedInput: submittedInput,
+                preheatResources: preheatResources,
+                onWorkflowFinished: onWorkflowFinished
+            )
+        case .needsDuplicateConfirmation(let urls):
+            state.wrappedValue.pendingSavedLinks = urls
+            state.wrappedValue.pendingSavedLinksDownloader = downloaderType
+            state.wrappedValue.pendingSubmittedInput = submittedInput
+            state.wrappedValue.showingDuplicateAlert = true
+            state.wrappedValue.feedbackMessage = "请确认是否继续收藏"
+            state.wrappedValue.isError = false
+            state.wrappedValue.isWarning = true
+            state.wrappedValue.isDownloading = false
+            state.wrappedValue.activeWorkflowID = nil
+        case .feedback(let feedback):
+            applyFeedback(feedback, state: state, workflowID: workflowID)
+            state.wrappedValue.activeWorkflowID = nil
+        }
+    }
+
+    @MainActor
+    private static func saveLinks(
+        _ urls: [String],
+        downloaderType: ImageDownloaderType,
+        state: Binding<MacHomeState>,
+        workflowID: UUID,
+        submittedInput: String,
+        preheatResources: Bool,
+        onWorkflowFinished: @escaping @MainActor () -> Void
+    ) async {
+        let result = await DownloadManager.shared.saveLinks(
+            urls,
+            downloaderType: downloaderType,
+            shouldPreheatResources: preheatResources,
+            onProgress: { feedback in
+                applyFeedback(feedback, state: state, workflowID: workflowID)
+            }
+        )
+
+        guard state.wrappedValue.activeWorkflowID == workflowID else { return }
+
+        state.wrappedValue.pendingSavedLinks = []
+        state.wrappedValue.pendingSavedLinksDownloader = nil
+        state.wrappedValue.pendingSubmittedInput = nil
+        applyWorkflowResult(
+            result,
+            state: state,
+            workflowID: workflowID,
+            submittedInput: submittedInput,
+            onWorkflowFinished: onWorkflowFinished
+        )
+    }
 }
 
 struct MacHomeView: View {
@@ -123,27 +376,6 @@ struct MacHomeView: View {
                 .help("选择下载器")
             }
         }
-        .alert("重复链接提醒", isPresented: $state.showingDuplicateAlert) {
-            Button("取消", role: .cancel) {
-                state.pendingSavedLinks = []
-                state.pendingSavedLinksDownloader = nil
-                state.feedbackMessage = "已取消收藏"
-                state.isError = false
-                state.isWarning = true
-                state.isDownloading = false
-            }
-            Button("继续") {
-                continueSavingPendingLinks()
-            }
-        } message: {
-            Text("检测到收藏列表中已存在部分链接，是否继续收藏？")
-        }
-        .onChange(of: state.pendingSubmitRequest) { request in
-            guard request != nil else { return }
-
-            submitCurrentInput()
-            state.pendingSubmitRequest = nil
-        }
     }
     
     private var logoHeader: some View {
@@ -180,7 +412,11 @@ struct MacHomeView: View {
             }
             
             Button {
-                submitCurrentInput()
+                MacHomeWorkflow.submitCurrentInput(
+                    state: $state,
+                    saveLinksOnly: saveLinksOnly,
+                    preheatResources: preheatResources
+                )
             } label: {
                 MacPrimaryActionButtonLabel(
                     title: saveLinksOnly ? "收藏" : "下载",
@@ -248,119 +484,6 @@ struct MacHomeView: View {
         if state.isError { return .red }
         if state.isWarning || state.isDownloading { return .yellow }
         return .green
-    }
-    
-    @MainActor
-    private func submitCurrentInput() {
-        guard !state.isDownloading else { return }
-        
-        let input = state.linkInput
-        let downloaderType = state.selectedDownloader
-        let shouldSaveLinksOnly = saveLinksOnly
-        
-        state.feedbackMessage = shouldSaveLinksOnly ? "正在收藏..." : "准备下载..."
-        state.isError = false
-        state.isWarning = false
-        state.isDownloading = true
-        
-        Task {
-            if shouldSaveLinksOnly {
-                await saveLinksButtonTapped(input: input, downloaderType: downloaderType)
-            } else {
-                await downloadButtonTapped(input: input, downloaderType: downloaderType)
-            }
-        }
-    }
-    
-    @MainActor
-    private func continueSavingPendingLinks() {
-        guard !state.isDownloading else { return }
-        
-        let urls = state.pendingSavedLinks
-        let downloaderType = state.pendingSavedLinksDownloader ?? state.selectedDownloader
-        
-        state.feedbackMessage = "正在收藏..."
-        state.isError = false
-        state.isWarning = false
-        state.isDownloading = true
-        
-        Task {
-            await saveLinks(urls, downloaderType: downloaderType)
-        }
-    }
-    
-    private func downloadButtonTapped(input: String, downloaderType: ImageDownloaderType) async {
-        let result = await DownloadManager.shared.performDownload(
-            from: input,
-            downloaderType: downloaderType,
-            invalidLineHandling: .skipWithWarning,
-            onProgress: { feedback in
-                applyFeedback(feedback)
-            }
-        )
-        
-        Task { @MainActor in
-            applyWorkflowResult(result)
-        }
-    }
-    
-    private func saveLinksButtonTapped(input: String, downloaderType: ImageDownloaderType) async {
-        await handleSavePreparation(
-            DownloadManager.shared.prepareSaveLinks(from: input),
-            downloaderType: downloaderType
-        )
-    }
-    
-    private func applyFeedback(_ feedback: HomeWorkflowFeedback) {
-        state.feedbackMessage = feedback.message
-        state.isError = feedback.isError
-        state.isWarning = feedback.isWarning
-        state.isDownloading = feedback.isDownloading
-    }
-
-    private func applyWorkflowResult(_ result: HomeWorkflowResult) {
-        if result.shouldClearInput {
-            state.linkInput = ""
-        }
-
-        applyFeedback(result.feedback)
-    }
-
-    private func handleSavePreparation(
-        _ preparation: HomeSavePreparation,
-        downloaderType: ImageDownloaderType
-    ) async {
-        switch preparation {
-        case .ready(let urls):
-            await saveLinks(urls, downloaderType: downloaderType)
-        case .needsDuplicateConfirmation(let urls):
-            state.pendingSavedLinks = urls
-            state.pendingSavedLinksDownloader = downloaderType
-            state.showingDuplicateAlert = true
-            state.feedbackMessage = "请确认是否继续收藏"
-            state.isError = false
-            state.isWarning = true
-            state.isDownloading = false
-        case .feedback(let feedback):
-            applyFeedback(feedback)
-        }
-    }
-
-    private func saveLinks(_ urls: [String], downloaderType: ImageDownloaderType) async {
-        let result = await DownloadManager.shared.saveLinks(
-            urls,
-            downloaderType: downloaderType,
-            shouldPreheatResources: preheatResources,
-            onProgress: { feedback in
-                applyFeedback(feedback)
-            }
-        )
-
-        Task { @MainActor in
-            state.pendingSavedLinks = []
-            state.pendingSavedLinksDownloader = nil
-            applyWorkflowResult(result)
-        }
     }
 }
 
