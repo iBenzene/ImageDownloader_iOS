@@ -312,7 +312,7 @@ class DownloadManager: ObservableObject {
         case .failure(let error):
             return HomeWorkflowResult(
                 shouldClearInput: false,
-                feedback: .error(error)
+                feedback: .error(incomplete ? "已保存 \(urls.count) 个链接，但预热失败：\(error)。\(warning)" : error)
             )
         }
     }
