@@ -420,7 +420,7 @@ struct MacHomeView: View {
             } label: {
                 MacPrimaryActionButtonLabel(
                     title: saveLinksOnly ? "收藏" : "下载",
-                    systemImage: saveLinksOnly ? "link.badge.plus" : "arrow.down"
+                    systemImage: saveLinksOnly ? "link.badge.plus" : "tray.and.arrow.down"
                 )
             }
             .buttonStyle(.plain)

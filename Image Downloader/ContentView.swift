@@ -7,7 +7,7 @@
 //
 
 import SwiftUI
-import Photos
+import UIKit
 
 struct ContentView: View {
     @State private var linkInput: String = ""
@@ -23,6 +23,9 @@ struct ContentView: View {
     @State private var pendingSavedLinks: [String] = []
     @State private var pendingSavedLinksDownloader: ImageDownloaderType?
     
+    @State private var editorContentHeight: CGFloat = 0
+    @State private var scrollOffset: CGFloat = 0
+    
     @AppStorage("saveLinksOnly") private var saveLinksOnly: Bool = false
     @AppStorage("preheatResources") private var preheatResources: Bool = false
 
@@ -30,38 +33,67 @@ struct ContentView: View {
     
     var body: some View {
         NavigationStack {
-            VStack {
-                // 顶部栏
-                HStack {
-                    // 占位的空按钮
-                    Button(action: {}) {
-                        Image(systemName: "photo")
-                            .resizable()
-                            .frame(width: 25, height: 25)
-                            .opacity(0) // 完全透明, 即隐藏
-                    }
-                    .padding()
-                    
-                    Spacer()
-                    
-                    HStack {
-                        Image("logo")
-                            .resizable()
-                            .frame(width: 50, height: 50)
+            GeometryReader { proxy in
+                ZStack(alignment: .bottomTrailing) {
+                    ScrollView {
+                        GeometryReader { geometryProxy in
+                            Color.clear.preference(
+                                key: HomeScrollOffsetPreferenceKey.self,
+                                value: geometryProxy.frame(in: .named("HomeScroll")).minY
+                            )
+                        }
+                        .frame(height: 0)
                         
-                        Text("苯苯存图")
-                            .font(.largeTitle)
-                            .foregroundColor(Color("AccentColor"))
-                            .bold()
+                        VStack(alignment: .leading, spacing: 18) {
+                            logoHeader
+                            
+                            ZStack(alignment: .topLeading) {
+                                HomeExpandingTextView(
+                                    text: $linkInput,
+                                    measuredHeight: $editorContentHeight
+                                )
+                                .frame(
+                                    minHeight: max(editorContentHeight, minimumEditorHeight(for: proxy.size.height)),
+                                    maxHeight: .infinity
+                                )
+                                
+                                if linkInput.isEmpty {
+                                    Text("请粘贴链接，每行一个")
+                                        .font(.body)
+                                        .foregroundStyle(.secondary)
+                                        .padding(.top, HomeEditorMetrics.textContainerInset.top)
+                                        .padding(.leading, HomeEditorMetrics.textContainerInset.left)
+                                        .allowsHitTesting(false)
+                                }
+                            }
+                        }
+                        .padding(.top, 24)
+                        .padding(.horizontal, 28)
+                        .padding(.bottom, 108)
+                    }
+                    .coordinateSpace(name: "HomeScroll")
+                    .scrollIndicators(.visible)
+                    .scrollDismissesKeyboard(.interactively)
+                    .onPreferenceChange(HomeScrollOffsetPreferenceKey.self) { value in
+                        scrollOffset = max(0, -value)
                     }
                     
-                    Spacer()
+                    scrollEdgeGlass
                     
-                    // 下拉菜单
+                    bottomActionBar
+                }
+            }
+            .background(Color(.systemBackground).ignoresSafeArea())
+            .homeSeamlessTabBar()
+            .navigationTitle("首页")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
                     Menu {
                         Picker("下载器类型", selection: $selectedDownloader) {
                             ForEach(ImageDownloaderType.allCases, id: \.self) { downloaderType in
                                 Text(downloaderType.rawValue)
+                                    .tag(downloaderType)
                             }
                         }
                         
@@ -78,18 +110,13 @@ struct ContentView: View {
                         } label: {
                             Label("下载记录", systemImage: "clock.arrow.circlepath")
                         }
-                        
                     } label: {
-                        Image(systemName: "ellipsis.circle")
-                            .resizable()
-                            .frame(width: 25, height: 25)
+                        Image(systemName: "line.3.horizontal.decrease.circle")
                             .foregroundColor(Color("AccentColor"))
                     }
-                    .padding()
                 }
-                .padding([.top, .bottom])
-                .navigationTitle("首页").navigationBarTitleDisplayMode(.inline)
-                
+            }
+            .background {
                 // 用于跳转到「实况图片转换器」页面
                 NavigationLink(
                     destination: LivePhotoConverterView(),
@@ -105,77 +132,7 @@ struct ContentView: View {
                     label: { EmptyView() }
                 )
                 .hidden()
-
-                
-                // 文本输入框
-                ZStack(alignment: .topLeading) {
-                    TextEditor(text: $linkInput)
-                        .frame(maxWidth: .infinity, maxHeight: UIScreen.main.bounds.size.height * 0.55)
-                        .padding(10)                        // 设置内边距
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 10)
-                                .stroke(Color.gray, lineWidth: 1.5)
-                        )                                   // 圆角矩形边框
-                        .multilineTextAlignment(.leading)   // 初始时光标最左
-                    
-                    Text("请粘贴链接，每行一个")
-                        .foregroundColor(Color.gray)
-                        .opacity(linkInput.isEmpty ? 1 : 0) // 显示提示词的条件
-                        .padding(.horizontal, 14)           // 调整左边距
-                        .padding(.top, 18)                  // 调整上边距
-                }
-                .padding()
-                
-                // 底部栏
-                HStack {
-                    Button(action: {
-                        // 执行粘贴操作的函数
-                        pasteButtonTapped()
-                    }) {
-                        Image("clipboard")
-                            .resizable()
-                            .frame(width: 22, height: 30)
-                            .foregroundColor(Color("AccentColor"))
-                    }
-                    .padding()
-                    
-                    Button(action: {
-                        startPrimaryAction()
-                    }) {
-                        Text(saveLinksOnly ? "收藏" : "下载")
-                            .foregroundColor(.white)
-                            .bold()
-                            .padding()
-                            .frame(maxWidth: .infinity)
-                            .background(Color("AccentColor"))
-                            .cornerRadius(10)
-                    }
-                    .disabled(isDownloading)
-                    .opacity(isDownloading ? 0.6 : 1)
-                    .padding()
-                    
-                    Button(action: {
-                        // 清空文本框的内容
-                        linkInput = ""
-                        feedbackMessage = nil
-                    }) {
-                        Image(systemName: "trash")
-                            .resizable()
-                            .frame(width: 27, height: 30)
-                            .foregroundColor(Color("AccentColor"))
-                    }
-                    .padding()
-                }
-                
-                if let message = feedbackMessage {
-                    Text(message)
-                        .font(.footnote)
-                        .foregroundColor(isError ? .red : (isWarning ? .yellow : (isDownloading ? .yellow : .green)))
-                        .padding()
-                }
             }
-            .padding()
-            .toolbar(.hidden, for: .navigationBar)
             .alert("重复链接提醒", isPresented: $showingDuplicateAlert) {
                 Button("取消", role: .cancel) {
                     pendingSavedLinks = []
@@ -192,6 +149,140 @@ struct ContentView: View {
                 Text("检测到收藏列表中已存在部分链接，是否继续收藏？")
             }
         }
+    }
+    
+    private var logoHeader: some View {
+        HStack(alignment: .center, spacing: 12) {
+            Image("logo")
+                .resizable()
+                .frame(width: 36, height: 36)
+            
+            VStack(alignment: .leading, spacing: 2) {
+                Text("苯苯存图")
+                    .font(.title2.weight(.semibold))
+                Text(selectedDownloader.rawValue)
+                    .foregroundStyle(.secondary)
+            }
+            
+            Spacer()
+        }
+    }
+    
+    private var bottomActionBar: some View {
+        VStack(alignment: .center, spacing: 12) {
+            if let message = feedbackMessage {
+                feedbackCapsule(message: message)
+            }
+            
+            actionButtonsCapsule
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 28)
+        .padding(.bottom, 24)
+    }
+    
+    private var actionButtonsCapsule: some View {
+        HStack(spacing: 4) {
+            Button(action: pasteButtonTapped) {
+                HomeCapsuleActionItemLabel(
+                    title: "粘贴",
+                    systemImage: "doc.on.clipboard"
+                )
+            }
+            .buttonStyle(.plain)
+            
+            Button(action: startPrimaryAction) {
+                HomeCapsuleActionItemLabel(
+                    title: saveLinksOnly ? "收藏" : "下载",
+                    systemImage: saveLinksOnly ? "link.badge.plus" : "tray.and.arrow.down"
+                )
+            }
+            .buttonStyle(.plain)
+            .disabled(isDownloading)
+            .opacity(isDownloading ? 0.6 : 1)
+            
+            Button {
+                linkInput = ""
+                feedbackMessage = nil
+            } label: {
+                HomeCapsuleActionItemLabel(
+                    title: "删除",
+                    systemImage: "trash"
+                )
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .background {
+            Capsule()
+                .fill(.ultraThinMaterial)
+                .overlay {
+                    Capsule()
+                        .fill(.background.opacity(0.48))
+                }
+                .overlay {
+                    Capsule()
+                        .stroke(.white.opacity(0.72), lineWidth: 0.8)
+                }
+                .overlay {
+                    Capsule()
+                        .stroke(.primary.opacity(0.08), lineWidth: 0.6)
+                }
+        }
+        .shadow(color: .black.opacity(0.08), radius: 18, y: 8)
+    }
+    
+    private func feedbackCapsule(message: String) -> some View {
+        Label(message, systemImage: feedbackIcon)
+            .font(.callout)
+            .foregroundStyle(feedbackColor)
+            .lineLimit(2)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(.regularMaterial, in: Capsule())
+            .shadow(color: .black.opacity(0.08), radius: 14, y: 5)
+    }
+    
+    private var scrollEdgeGlass: some View {
+        VStack(spacing: 0) {
+            Rectangle()
+                .fill(.ultraThinMaterial)
+                .opacity(min(scrollOffset / 72, 1))
+                .frame(height: 72)
+                .mask(
+                    LinearGradient(
+                        stops: [
+                            .init(color: .black, location: 0),
+                            .init(color: .black.opacity(0.86), location: 0.62),
+                            .init(color: .clear, location: 1)
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+            
+            Spacer()
+        }
+        .ignoresSafeArea(edges: .top)
+        .allowsHitTesting(false)
+    }
+    
+    private func minimumEditorHeight(for containerHeight: CGFloat) -> CGFloat {
+        max(260, containerHeight - 170)
+    }
+    
+    private var feedbackIcon: String {
+        if isError { return "exclamationmark.triangle" }
+        if isWarning { return "exclamationmark.circle" }
+        if isDownloading { return "arrow.down.circle" }
+        return "checkmark.circle"
+    }
+    
+    private var feedbackColor: Color {
+        if isError { return .red }
+        if isWarning || isDownloading { return .yellow }
+        return .green
     }
     
     @MainActor
@@ -322,6 +413,142 @@ struct ContentView: View {
             DownloadManager.shared.prepareSaveLinks(from: input),
             downloaderType: downloaderType
         )
+    }
+}
+
+private struct HomeCapsuleActionItemLabel: View {
+    let title: String
+    let systemImage: String
+    var tint: Color = Color("AccentColor")
+    @State private var isHovered = false
+
+    var body: some View {
+        Image(systemName: systemImage)
+            .font(.system(size: 20, weight: .medium))
+            .foregroundStyle(tint)
+            .frame(width: 52, height: 44)
+            .background {
+                if isHovered {
+                    Capsule()
+                        .fill(.primary.opacity(0.06))
+                }
+            }
+            .contentShape(Capsule())
+            .accessibilityLabel(title)
+            .onHover { isHovered = $0 }
+    }
+}
+
+private struct HomeExpandingTextView: UIViewRepresentable {
+    @Binding var text: String
+    @Binding var measuredHeight: CGFloat
+    
+    func makeUIView(context: Context) -> UITextView {
+        let textView = HomeUITextView()
+        textView.delegate = context.coordinator
+        textView.backgroundColor = .clear
+        textView.font = .preferredFont(forTextStyle: .body)
+        textView.adjustsFontForContentSizeCategory = true
+        textView.isScrollEnabled = false
+        textView.alwaysBounceVertical = false
+        textView.layoutManager.allowsNonContiguousLayout = true
+        textView.textContainerInset = HomeEditorMetrics.textContainerInset
+        textView.textContainer.lineFragmentPadding = 0
+        textView.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        return textView
+    }
+    
+    func updateUIView(_ textView: UITextView, context: Context) {
+        if textView.text != text {
+            textView.text = text
+        }
+        
+        recalculateHeight(for: textView)
+    }
+    
+    func makeCoordinator() -> Coordinator {
+        Coordinator(text: $text, measuredHeight: $measuredHeight)
+    }
+    
+    private func recalculateHeight(for textView: UITextView) {
+        DispatchQueue.main.async {
+            let fittingWidth = max(textView.bounds.width, 1)
+            let targetSize = CGSize(width: fittingWidth, height: .greatestFiniteMagnitude)
+            let newHeight = textView.sizeThatFits(targetSize).height
+            
+            if abs(measuredHeight - newHeight) > 0.5 {
+                measuredHeight = newHeight
+            }
+        }
+    }
+    
+    final class Coordinator: NSObject, UITextViewDelegate {
+        @Binding private var text: String
+        @Binding private var measuredHeight: CGFloat
+        
+        init(text: Binding<String>, measuredHeight: Binding<CGFloat>) {
+            _text = text
+            _measuredHeight = measuredHeight
+        }
+        
+        func textViewDidChange(_ textView: UITextView) {
+            text = textView.text
+            
+            let fittingWidth = max(textView.bounds.width, 1)
+            let targetSize = CGSize(width: fittingWidth, height: .greatestFiniteMagnitude)
+            let newHeight = textView.sizeThatFits(targetSize).height
+            
+            if abs(measuredHeight - newHeight) > 0.5 {
+                measuredHeight = newHeight
+            }
+        }
+    }
+}
+
+private enum HomeEditorMetrics {
+    static let textContainerInset = UIEdgeInsets(top: 8, left: 0, bottom: 16, right: 0)
+}
+
+private final class HomeUITextView: UITextView {
+    private var isHandlingSelectAll = false
+    
+    override var keyCommands: [UIKeyCommand]? {
+        let selectAll = UIKeyCommand(
+            input: "a",
+            modifierFlags: .command,
+            action: #selector(selectAllWithoutScrollJump(_:))
+        )
+        return (super.keyCommands ?? []) + [selectAll]
+    }
+    
+    @objc private func selectAllWithoutScrollJump(_ sender: UIKeyCommand) {
+        isHandlingSelectAll = true
+        selectedRange = NSRange(location: 0, length: textStorage.length)
+        isHandlingSelectAll = false
+    }
+    
+    override func scrollRangeToVisible(_ range: NSRange) {
+        guard !isHandlingSelectAll else { return }
+        super.scrollRangeToVisible(range)
+    }
+}
+
+private struct HomeScrollOffsetPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
+private extension View {
+    @ViewBuilder
+    func homeSeamlessTabBar() -> some View {
+        if #unavailable(iOS 26) {
+            self.toolbarBackground(.hidden, for: .tabBar)
+        } else {
+            self
+        }
     }
 }
 
