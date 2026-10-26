@@ -9,8 +9,9 @@
 ❤️ 或许「**苯苯存图**」可以帮助你～
 
 <div align=center>
-  <img src="https://cdn.ibenzene.net/image-downloader/Preview_iOS.png" alt="预览图" width="30%"></img>
+  <img src="https://cdn.ibenzene.net/image-downloader/Preview_iOS.png" alt="预览图" width="75%"></img>
 </div>
+
 
 
 ## 快速开始
