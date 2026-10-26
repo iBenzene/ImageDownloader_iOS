@@ -28,6 +28,7 @@ struct SavedLinkItemAPI: Codable {
     let updated_at: String
     let is_deleted: Bool
     let metadata: [String: String]?
+    let content_key: String?
     let cached_urls: [String]?
     
     init(from item: SavedLinkItem) {
@@ -39,6 +40,7 @@ struct SavedLinkItemAPI: Codable {
         self.updated_at = ISO8601DateFormatter.string(from: item.updatedAt, timeZone: TimeZone(secondsFromGMT: 0)!, formatOptions: [.withInternetDateTime, .withFractionalSeconds])
         self.is_deleted = item.isDeleted
         self.metadata = nil
+        self.content_key = item.contentKey
         self.cached_urls = item.cachedUrls
     }
     
@@ -63,7 +65,8 @@ struct SavedLinkItemAPI: Codable {
             updatedAt: updatedAtDate,
             isDeleted: is_deleted,
             isDirty: false,
-            cachedUrls: cached_urls
+            cachedUrls: cached_urls,
+            contentKey: content_key
         )
     }
 }

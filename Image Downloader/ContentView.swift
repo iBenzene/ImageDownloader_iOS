@@ -173,7 +173,7 @@ struct ContentView: View {
                 continueSavingPendingLinks()
             }
         } message: {
-            Text("检测到收藏列表中已存在部分链接，是否继续收藏？")
+            Text("检测到收藏列表或本次输入中存在重复链接或相同内容，是否继续收藏？")
         }
     }
     
@@ -436,7 +436,7 @@ struct ContentView: View {
     // 执行收藏操作
     func saveLinksButtonTapped(input: String, downloaderType: ImageDownloaderType) async {
         await handleSavePreparation(
-            DownloadManager.shared.prepareSaveLinks(from: input),
+            await DownloadManager.shared.prepareSaveLinks(from: input, downloaderType: downloaderType),
             downloaderType: downloaderType
         )
     }

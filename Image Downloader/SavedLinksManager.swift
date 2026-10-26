@@ -28,6 +28,7 @@ struct SavedLinkItem: Identifiable, Codable, Equatable {
     var isDeleted: Bool
     var isDirty: Bool
     
+    var contentKey: String?
     // Cached resource URLs from preheating
     var cachedUrls: [String]?
     
@@ -45,7 +46,7 @@ struct SavedLinkItem: Identifiable, Codable, Equatable {
     }
     
     // Internal init for merging/syncing
-    init(id: UUID, url: String, timestamp: Date, downloaderType: String, status: SavedLinkStatus, updatedAt: Date, isDeleted: Bool, isDirty: Bool, cachedUrls: [String]? = nil) {
+    init(id: UUID, url: String, timestamp: Date, downloaderType: String, status: SavedLinkStatus, updatedAt: Date, isDeleted: Bool, isDirty: Bool, cachedUrls: [String]? = nil, contentKey: String? = nil) {
         self.id = id
         self.url = url
         self.timestamp = timestamp
@@ -55,6 +56,7 @@ struct SavedLinkItem: Identifiable, Codable, Equatable {
         self.isDeleted = isDeleted
         self.isDirty = isDirty
         self.cachedUrls = cachedUrls
+        self.contentKey = contentKey
     }
     
     // Custom decoding for migration
@@ -70,6 +72,7 @@ struct SavedLinkItem: Identifiable, Codable, Equatable {
         self.updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt) ?? timestamp
         self.isDeleted = try container.decodeIfPresent(Bool.self, forKey: .isDeleted) ?? false
         self.isDirty = try container.decodeIfPresent(Bool.self, forKey: .isDirty) ?? true
+        self.contentKey = try container.decodeIfPresent(String.self, forKey: .contentKey)
         self.cachedUrls = try container.decodeIfPresent([String].self, forKey: .cachedUrls)
     }
 }
@@ -109,13 +112,24 @@ class SavedLinksManager: ObservableObject {
         return visibleItems.contains { $0.url == url }
     }
 
+    func updateContentKey(url: String, key: String) {
+        var changed = false
+        for index in items.indices where items[index].url == url && items[index].contentKey != key {
+            items[index].contentKey = key
+            items[index].updatedAt = Date()
+            items[index].isDirty = true
+            changed = true
+        }
+        if changed { saveItems() }
+    }
+
     // Add a new saved link
     func addLink(url: String, downloaderType: String) {
         addLinks(urls: [url], downloaderType: downloaderType)
     }
     
     // Add multiple links at once
-    func addLinks(urls: [String], downloaderType: String) {
+    func addLinks(urls: [String], downloaderType: String, contentKeys: [String: String] = [:]) {
         var needsSave = false
         
         for url in urls {
@@ -135,6 +149,7 @@ class SavedLinksManager: ObservableObject {
                 }
                 
                 // Update metadata for the winner
+                winner.contentKey = contentKeys[url] ?? winner.contentKey
                 winner.timestamp = Date()
                 winner.updatedAt = Date()
                 winner.isDirty = true
@@ -163,7 +178,8 @@ class SavedLinksManager: ObservableObject {
                 
             } else {
                 // New item
-                let item = SavedLinkItem(url: url, downloaderType: downloaderType)
+                var item = SavedLinkItem(url: url, downloaderType: downloaderType)
+                item.contentKey = contentKeys[url]
                 items.insert(item, at: 0)
                 needsSave = true
             }
@@ -267,6 +283,11 @@ class SavedLinksManager: ObservableObject {
                     logDebug("Merge [Update]: \(remote.id) - Local isDeleted: \(local.isDeleted) -> Remote isDeleted: \(remote.isDeleted) (Remote updatedAt: \(remote.updatedAt) >= Local: \(local.updatedAt))")
                     var merged = remote
                     merged.isDirty = false
+                    if merged.url == local.url, merged.contentKey == nil, let key = local.contentKey {
+                        merged.contentKey = key
+                        merged.updatedAt = Date()
+                        merged.isDirty = true
+                    }
                     items[index] = merged
                     needsSave = true
                 } else {

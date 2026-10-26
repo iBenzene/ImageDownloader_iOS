@@ -170,7 +170,18 @@ class DownloadManager: ObservableObject {
         }
     }
 
-    func prepareSaveLinks(from input: String) -> HomeSavePreparation {
+    private var resolvedContentKeys: [String: String] = [:]
+    private var identityCheckIncomplete = false
+    private var identityRetryAfter: [String: Date] = [:]
+
+    private func identityPlatform(_ downloader: String) -> String? {
+        if [ImageDownloaderType.xhsImg.rawValue, ImageDownloaderType.xhsLiveImg.rawValue, ImageDownloaderType.xhsVid.rawValue].contains(downloader) { return "xhs" }
+        return downloader == ImageDownloaderType.bVid.rawValue ? "bilibili" : nil
+    }
+
+    @MainActor
+    func prepareSaveLinks(from input: String, downloaderType: ImageDownloaderType) async -> HomeSavePreparation {
+        identityCheckIncomplete = false
         let extraction = extractUrlStrings(
             from: input,
             noMatchesMessage: "未找到有效链接",
@@ -179,33 +190,87 @@ class DownloadManager: ObservableObject {
 
         switch extraction {
         case .success(let urls, _):
-            let duplicates = urls.filter { url in
-                SavedLinksManager.shared.hasActiveLink(url: url)
+            let manager = SavedLinksManager.shared
+            if let platform = identityPlatform(downloaderType.rawValue) {
+                let oldItems = manager.visibleItems.filter {
+                    $0.contentKey == nil && identityPlatform($0.downloaderType) == platform
+                }
+                var candidates = urls.map { ($0, downloaderType.rawValue) }
+                candidates += oldItems.map { ($0.url, $0.downloaderType) }
+                let deadline = Date().addingTimeInterval(20)
+                var visited = Set<String>()
+                for (url, downloader) in candidates {
+                    guard visited.insert(url).inserted else { continue }
+                    if let key = manager.visibleItems.first(where: { $0.url == url })?.contentKey {
+                        resolvedContentKeys[url] = key
+                    }
+                    if let key = resolvedContentKeys[url] {
+                        manager.updateContentKey(url: url, key: key)
+                        continue
+                    }
+                    if Date() >= deadline || Task.isCancelled {
+                        identityCheckIncomplete = true
+                        break
+                    }
+                    if let retryAfter = identityRetryAfter[url], retryAfter > Date() {
+                        identityCheckIncomplete = true
+                        continue
+                    }
+                    do {
+                        if let key = try await MediaExtractService.fetchContentKey(
+                            url: url, downloader: downloader, serverUrl: serverUrl, token: serverToken
+                        ) {
+                            resolvedContentKeys[url] = key
+                            manager.updateContentKey(url: url, key: key)
+                        } else {
+                            identityCheckIncomplete = true
+                            identityRetryAfter[url] = Date().addingTimeInterval(300)
+                        }
+                    } catch {
+                        identityCheckIncomplete = true
+                        identityRetryAfter[url] = Date().addingTimeInterval(300)
+                    }
+                    try? await Task.sleep(nanoseconds: 150_000_000)
+                }
             }
-
-            if duplicates.isEmpty {
-                return .ready(urls)
+            if Task.isCancelled { return .feedback(.warning("已取消收藏")) }
+            var seenUrls = Set(manager.visibleItems.map { $0.url })
+            var seenKeys = Set(manager.visibleItems.compactMap { $0.contentKey })
+            var hasDuplicate = false
+            for url in urls {
+                if manager.hasActiveLink(url: url) { hasDuplicate = true }
+                if identityPlatform(downloaderType.rawValue) != nil, !seenUrls.insert(url).inserted { hasDuplicate = true }
+                if identityPlatform(downloaderType.rawValue) != nil,
+                   let key = resolvedContentKeys[url], !seenKeys.insert(key).inserted {
+                    hasDuplicate = true
+                }
             }
-
-            return .needsDuplicateConfirmation(urls)
+            return hasDuplicate ? .needsDuplicateConfirmation(urls) : .ready(urls)
 
         case .failure(let feedback):
             return .feedback(feedback)
         }
     }
 
+    @MainActor
     func saveLinks(
         _ urls: [String],
         downloaderType: ImageDownloaderType,
         shouldPreheatResources: Bool,
         onProgress: @escaping (HomeWorkflowFeedback) -> Void
     ) async -> HomeWorkflowResult {
-        SavedLinksManager.shared.addLinks(urls: urls, downloaderType: downloaderType.rawValue)
+        let keys = identityPlatform(downloaderType.rawValue) == nil ? [:] : resolvedContentKeys
+        SavedLinksManager.shared.addLinks(urls: urls, downloaderType: downloaderType.rawValue, contentKeys: keys)
+        let incomplete = identityPlatform(downloaderType.rawValue) != nil && identityCheckIncomplete
+        let warning = "部分新链接或旧收藏未完成内容去重，仍可能存在重复，可稍后重试补全"
+        func savedFeedback(_ message: String) -> HomeWorkflowFeedback {
+            incomplete ? .warning(message + "。" + warning) : .success(message)
+        }
 
         guard shouldPreheatResources else {
             return HomeWorkflowResult(
                 shouldClearInput: true,
-                feedback: .success("已保存 \(urls.count) 个链接")
+                feedback: savedFeedback("已保存 \(urls.count) 个链接")
             )
         }
 
@@ -241,7 +306,7 @@ class DownloadManager: ObservableObject {
 
             return HomeWorkflowResult(
                 shouldClearInput: true,
-                feedback: .success("已保存 \(urls.count) 个链接，预热成功（缓存 \(cachedUrlCount) 个资源）")
+                feedback: savedFeedback("已保存 \(urls.count) 个链接，预热成功（缓存 \(cachedUrlCount) 个资源）")
             )
 
         case .failure(let error):

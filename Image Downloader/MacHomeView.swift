@@ -170,7 +170,7 @@ enum MacHomeWorkflow {
         onWorkflowFinished: @escaping @MainActor () -> Void
     ) async {
         await handleSavePreparation(
-            DownloadManager.shared.prepareSaveLinks(from: input),
+            await DownloadManager.shared.prepareSaveLinks(from: input, downloaderType: downloaderType),
             downloaderType: downloaderType,
             state: state,
             workflowID: workflowID,

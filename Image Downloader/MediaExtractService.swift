@@ -8,6 +8,25 @@
 import Foundation
 
 enum MediaExtractService {
+    static func fetchContentKey(url: String, downloader: String, serverUrl: String, token: String) async throws -> String? {
+        let base = serverUrl.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        guard !base.isEmpty, var components = URLComponents(string: "\(base)/v1/resolve") else {
+            throw URLError(.badURL)
+        }
+        components.queryItems = [
+            URLQueryItem(name: "url", value: url),
+            URLQueryItem(name: "downloader", value: downloader),
+            URLQueryItem(name: "token", value: token.isEmpty ? "default_token" : token)
+        ]
+        guard let endpoint = components.url else { throw URLError(.badURL) }
+        var request = URLRequest(url: endpoint)
+        request.timeoutInterval = 10
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw URLError(.badServerResponse) }
+        struct IdentityResponse: Decodable { let contentKey: String? }
+        return try JSONDecoder().decode(IdentityResponse.self, from: data).contentKey
+    }
+
     private static let userAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
     static func fetchMediaUrls(
