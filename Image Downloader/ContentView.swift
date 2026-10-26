@@ -9,19 +9,25 @@
 import SwiftUI
 import UIKit
 
+final class MobileHomeState: ObservableObject {
+    @Published var linkInput: String = ""
+    @Published var feedbackMessage: String?
+    @Published var isError: Bool = false
+    @Published var isWarning: Bool = false
+    @Published var isDownloading: Bool = false
+    @Published var showingDuplicateAlert: Bool = false
+    @Published var pendingSavedLinks: [String] = []
+    @Published var pendingSavedLinksDownloader: ImageDownloaderType?
+    @Published var selectedDownloader: ImageDownloaderType = .xhsLiveImg
+}
+
 struct ContentView: View {
-    @State private var linkInput: String = ""
-    @State private var feedbackMessage: String?
-    
-    @State private var isError: Bool = false
-    @State private var isWarning: Bool = false
-    @State private var isDownloading: Bool = false
+    @ObservedObject var state: MobileHomeState
+    var embedsInNavigationStack: Bool = true
+    var showsToolNavigationInMenu: Bool = true
+
     @State private var showingLivePhotoConverter = false
     @State private var showingHistory = false
-    
-    @State private var showingDuplicateAlert = false
-    @State private var pendingSavedLinks: [String] = []
-    @State private var pendingSavedLinksDownloader: ImageDownloaderType?
     
     @State private var editorContentHeight: CGFloat = 0
     @State private var scrollOffset: CGFloat = 0
@@ -29,74 +35,92 @@ struct ContentView: View {
     @AppStorage("saveLinksOnly") private var saveLinksOnly: Bool = false
     @AppStorage("preheatResources") private var preheatResources: Bool = false
 
-    @State private var selectedDownloader: ImageDownloaderType = .xhsLiveImg
+    init(
+        state: MobileHomeState = MobileHomeState(),
+        embedsInNavigationStack: Bool = true,
+        showsToolNavigationInMenu: Bool = true
+    ) {
+        self.state = state
+        self.embedsInNavigationStack = embedsInNavigationStack
+        self.showsToolNavigationInMenu = showsToolNavigationInMenu
+    }
     
     var body: some View {
-        NavigationStack {
-            GeometryReader { proxy in
-                ZStack(alignment: .bottomTrailing) {
-                    ScrollView {
-                        GeometryReader { geometryProxy in
-                            Color.clear.preference(
-                                key: HomeScrollOffsetPreferenceKey.self,
-                                value: geometryProxy.frame(in: .named("HomeScroll")).minY
-                            )
-                        }
-                        .frame(height: 0)
-                        
-                        VStack(alignment: .leading, spacing: 18) {
-                            logoHeader
-                            
-                            ZStack(alignment: .topLeading) {
-                                HomeExpandingTextView(
-                                    text: $linkInput,
-                                    measuredHeight: $editorContentHeight
-                                )
-                                .frame(
-                                    minHeight: max(editorContentHeight, minimumEditorHeight(for: proxy.size.height)),
-                                    maxHeight: .infinity
-                                )
-                                
-                                if linkInput.isEmpty {
-                                    Text("请粘贴链接，每行一个")
-                                        .font(.body)
-                                        .foregroundStyle(.secondary)
-                                        .padding(.top, HomeEditorMetrics.textContainerInset.top)
-                                        .padding(.leading, HomeEditorMetrics.textContainerInset.left)
-                                        .allowsHitTesting(false)
-                                }
-                            }
-                        }
-                        .padding(.top, 24)
-                        .padding(.horizontal, 28)
-                        .padding(.bottom, 108)
-                    }
-                    .coordinateSpace(name: "HomeScroll")
-                    .scrollIndicators(.visible)
-                    .scrollDismissesKeyboard(.interactively)
-                    .onPreferenceChange(HomeScrollOffsetPreferenceKey.self) { value in
-                        scrollOffset = max(0, -value)
-                    }
-                    
-                    scrollEdgeGlass
-                    
-                    bottomActionBar
-                }
+        if embedsInNavigationStack {
+            NavigationStack {
+                homeContent
             }
-            .background(Color(.systemBackground).ignoresSafeArea())
-            .homeSeamlessTabBar()
-            .navigationTitle("首页")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Menu {
-                        Picker("下载器类型", selection: $selectedDownloader) {
-                            ForEach(ImageDownloaderType.allCases, id: \.self) { downloaderType in
-                                Text(downloaderType.rawValue)
-                                    .tag(downloaderType)
+        } else {
+            homeContent
+        }
+    }
+    
+    private var homeContent: some View {
+        GeometryReader { proxy in
+            ZStack(alignment: .bottomTrailing) {
+                ScrollView {
+                    GeometryReader { geometryProxy in
+                        Color.clear.preference(
+                            key: HomeScrollOffsetPreferenceKey.self,
+                            value: geometryProxy.frame(in: .named("HomeScroll")).minY
+                        )
+                    }
+                    .frame(height: 0)
+                    
+                    VStack(alignment: .leading, spacing: 18) {
+                        logoHeader
+                        
+                        ZStack(alignment: .topLeading) {
+                            HomeExpandingTextView(
+                                text: $state.linkInput,
+                                measuredHeight: $editorContentHeight
+                            )
+                            .frame(
+                                minHeight: max(editorContentHeight, minimumEditorHeight(for: proxy.size.height)),
+                                maxHeight: .infinity
+                            )
+                            
+                            if state.linkInput.isEmpty {
+                                Text("请粘贴链接，每行一个")
+                                    .font(.body)
+                                    .foregroundStyle(.secondary)
+                                    .padding(.top, HomeEditorMetrics.textContainerInset.top)
+                                    .padding(.leading, HomeEditorMetrics.textContainerInset.left)
+                                    .allowsHitTesting(false)
                             }
                         }
-                        
+                    }
+                    .padding(.top, 24)
+                    .padding(.horizontal, 28)
+                    .padding(.bottom, 108)
+                }
+                .coordinateSpace(name: "HomeScroll")
+                .scrollIndicators(.visible)
+                .scrollDismissesKeyboard(.interactively)
+                .onPreferenceChange(HomeScrollOffsetPreferenceKey.self) { value in
+                    scrollOffset = max(0, -value)
+                }
+                
+                scrollEdgeGlass
+                
+                bottomActionBar
+            }
+        }
+        .background(Color(.systemBackground).ignoresSafeArea())
+        .homeSeamlessTabBar()
+        .navigationTitle("首页")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Menu {
+                    Picker("下载器类型", selection: $state.selectedDownloader) {
+                        ForEach(ImageDownloaderType.allCases, id: \.self) { downloaderType in
+                            Text(downloaderType.rawValue)
+                                .tag(downloaderType)
+                        }
+                    }
+                    
+                    if showsToolNavigationInMenu {
                         Divider()
                         
                         Button {
@@ -110,13 +134,15 @@ struct ContentView: View {
                         } label: {
                             Label("下载记录", systemImage: "clock.arrow.circlepath")
                         }
-                    } label: {
-                        Image(systemName: "line.3.horizontal.decrease.circle")
-                            .foregroundColor(Color("AccentColor"))
                     }
+                } label: {
+                    Image(systemName: "line.3.horizontal.decrease.circle")
+                        .foregroundColor(Color("AccentColor"))
                 }
             }
-            .background {
+        }
+        .background {
+            if showsToolNavigationInMenu {
                 // 用于跳转到「实况图片转换器」页面
                 NavigationLink(
                     destination: LivePhotoConverterView(),
@@ -133,21 +159,21 @@ struct ContentView: View {
                 )
                 .hidden()
             }
-            .alert("重复链接提醒", isPresented: $showingDuplicateAlert) {
-                Button("取消", role: .cancel) {
-                    pendingSavedLinks = []
-                    pendingSavedLinksDownloader = nil
-                    feedbackMessage = "已取消收藏"
-                    isError = false
-                    isWarning = true
-                    isDownloading = false
-                }
-                Button("继续") {
-                    continueSavingPendingLinks()
-                }
-            } message: {
-                Text("检测到收藏列表中已存在部分链接，是否继续收藏？")
+        }
+        .alert("重复链接提醒", isPresented: $state.showingDuplicateAlert) {
+            Button("取消", role: .cancel) {
+                state.pendingSavedLinks = []
+                state.pendingSavedLinksDownloader = nil
+                state.feedbackMessage = "已取消收藏"
+                state.isError = false
+                state.isWarning = true
+                state.isDownloading = false
             }
+            Button("继续") {
+                continueSavingPendingLinks()
+            }
+        } message: {
+            Text("检测到收藏列表中已存在部分链接，是否继续收藏？")
         }
     }
     
@@ -160,7 +186,7 @@ struct ContentView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("苯苯存图")
                     .font(.title2.weight(.semibold))
-                Text(selectedDownloader.rawValue)
+                Text(state.selectedDownloader.rawValue)
                     .foregroundStyle(.secondary)
             }
             
@@ -170,7 +196,7 @@ struct ContentView: View {
     
     private var bottomActionBar: some View {
         VStack(alignment: .center, spacing: 12) {
-            if let message = feedbackMessage {
+            if let message = state.feedbackMessage {
                 feedbackCapsule(message: message)
             }
             
@@ -198,12 +224,12 @@ struct ContentView: View {
                 )
             }
             .buttonStyle(.plain)
-            .disabled(isDownloading)
-            .opacity(isDownloading ? 0.6 : 1)
+            .disabled(state.isDownloading)
+            .opacity(state.isDownloading ? 0.6 : 1)
             
             Button {
-                linkInput = ""
-                feedbackMessage = nil
+                state.linkInput = ""
+                state.feedbackMessage = nil
             } label: {
                 HomeCapsuleActionItemLabel(
                     title: "删除",
@@ -273,30 +299,30 @@ struct ContentView: View {
     }
     
     private var feedbackIcon: String {
-        if isError { return "exclamationmark.triangle" }
-        if isWarning { return "exclamationmark.circle" }
-        if isDownloading { return "arrow.down.circle" }
+        if state.isError { return "exclamationmark.triangle" }
+        if state.isWarning { return "exclamationmark.circle" }
+        if state.isDownloading { return "arrow.down.circle" }
         return "checkmark.circle"
     }
     
     private var feedbackColor: Color {
-        if isError { return .red }
-        if isWarning || isDownloading { return .yellow }
+        if state.isError { return .red }
+        if state.isWarning || state.isDownloading { return .yellow }
         return .green
     }
     
     @MainActor
     private func startPrimaryAction() {
-        guard !isDownloading else { return }
+        guard !state.isDownloading else { return }
         
-        let input = linkInput
-        let downloaderType = selectedDownloader
+        let input = state.linkInput
+        let downloaderType = state.selectedDownloader
         let shouldSaveLinksOnly = saveLinksOnly
         
-        feedbackMessage = shouldSaveLinksOnly ? "正在收藏..." : "准备下载..."
-        isError = false
-        isWarning = false
-        isDownloading = true
+        state.feedbackMessage = shouldSaveLinksOnly ? "正在收藏..." : "准备下载..."
+        state.isError = false
+        state.isWarning = false
+        state.isDownloading = true
         
         Task {
             if shouldSaveLinksOnly {
@@ -309,15 +335,15 @@ struct ContentView: View {
     
     @MainActor
     private func continueSavingPendingLinks() {
-        guard !isDownloading else { return }
+        guard !state.isDownloading else { return }
         
-        let urls = pendingSavedLinks
-        let downloaderType = pendingSavedLinksDownloader ?? selectedDownloader
+        let urls = state.pendingSavedLinks
+        let downloaderType = state.pendingSavedLinksDownloader ?? state.selectedDownloader
         
-        feedbackMessage = "正在收藏..."
-        isError = false
-        isWarning = false
-        isDownloading = true
+        state.feedbackMessage = "正在收藏..."
+        state.isError = false
+        state.isWarning = false
+        state.isDownloading = true
         
         Task {
             await saveLinks(urls, downloaderType: downloaderType)
@@ -341,15 +367,15 @@ struct ContentView: View {
     }
 
     private func applyFeedback(_ feedback: HomeWorkflowFeedback) {
-        feedbackMessage = feedback.message
-        isError = feedback.isError
-        isWarning = feedback.isWarning
-        isDownloading = feedback.isDownloading
+        state.feedbackMessage = feedback.message
+        state.isError = feedback.isError
+        state.isWarning = feedback.isWarning
+        state.isDownloading = feedback.isDownloading
     }
 
     private func applyWorkflowResult(_ result: HomeWorkflowResult) {
         if result.shouldClearInput {
-            linkInput = ""
+            state.linkInput = ""
         }
 
         applyFeedback(result.feedback)
@@ -363,13 +389,13 @@ struct ContentView: View {
         case .ready(let urls):
             await saveLinks(urls, downloaderType: downloaderType)
         case .needsDuplicateConfirmation(let urls):
-            pendingSavedLinks = urls
-            pendingSavedLinksDownloader = downloaderType
-            showingDuplicateAlert = true
-            feedbackMessage = "请确认是否继续收藏"
-            isError = false
-            isWarning = true
-            isDownloading = false
+            state.pendingSavedLinks = urls
+            state.pendingSavedLinksDownloader = downloaderType
+            state.showingDuplicateAlert = true
+            state.feedbackMessage = "请确认是否继续收藏"
+            state.isError = false
+            state.isWarning = true
+            state.isDownloading = false
         case .feedback(let feedback):
             applyFeedback(feedback)
         }
@@ -386,8 +412,8 @@ struct ContentView: View {
         )
 
         Task { @MainActor in
-            pendingSavedLinks = []
-            pendingSavedLinksDownloader = nil
+            state.pendingSavedLinks = []
+            state.pendingSavedLinksDownloader = nil
             applyWorkflowResult(result)
         }
     }
@@ -395,15 +421,15 @@ struct ContentView: View {
     // 执行粘贴操作
     func pasteButtonTapped() {
         if let clipboardContent = UIPasteboard.general.string {
-            if linkInput.isEmpty {
-                linkInput += clipboardContent
+            if state.linkInput.isEmpty {
+                state.linkInput += clipboardContent
             }
             else {
-                linkInput += "\n" + clipboardContent
+                state.linkInput += "\n" + clipboardContent
             }
         } else {
-            feedbackMessage = "剪贴板为空"
-            isError = true
+            state.feedbackMessage = "剪贴板为空"
+            state.isError = true
         }
     }
     
