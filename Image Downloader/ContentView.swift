@@ -26,7 +26,7 @@ struct ContentView: View {
     @AppStorage("saveLinksOnly") private var saveLinksOnly: Bool = false
     @AppStorage("preheatResources") private var preheatResources: Bool = false
 
-    @State private var selectedDownloader: ImageDownloaderType = .xhsImg
+    @State private var selectedDownloader: ImageDownloaderType = .xhsLiveImg
     
     var body: some View {
         NavigationStack {

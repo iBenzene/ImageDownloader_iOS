@@ -19,7 +19,7 @@ struct MacHomeState {
     var pendingSavedLinks: [String] = []
     var pendingSavedLinksDownloader: ImageDownloaderType?
     var pendingSubmittedInput: String?
-    var selectedDownloader: ImageDownloaderType = .xhsImg
+    var selectedDownloader: ImageDownloaderType = .xhsLiveImg
     var activeWorkflowID: UUID?
 
     @discardableResult

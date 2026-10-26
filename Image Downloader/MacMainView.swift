@@ -19,20 +19,26 @@ struct MacMainView: View {
     
     var body: some View {
         NavigationSplitView {
-            List(selection: $selectedItem) {
+            List {
                 Section("导航") {
                     ForEach(MacSidebarItem.primaryItems, id: \.self) { item in
-                        Label(item.title, systemImage: item.icon)
-                            .lineLimit(1)
-                            .tag(item)
+                        MacSidebarRow(
+                            item: item,
+                            isSelected: (selectedItem ?? .home) == item
+                        ) {
+                            selectedItem = item
+                        }
                     }
                 }
                 
                 Section("工具") {
                     ForEach(MacSidebarItem.toolItems, id: \.self) { item in
-                        Label(item.title, systemImage: item.icon)
-                            .lineLimit(1)
-                            .tag(item)
+                        MacSidebarRow(
+                            item: item,
+                            isSelected: (selectedItem ?? .home) == item
+                        ) {
+                            selectedItem = item
+                        }
                     }
                 }
             }
@@ -158,6 +164,42 @@ enum MacSidebarItem: String, CaseIterable {
     }
 }
 
+private struct MacSidebarRow: View {
+    let item: MacSidebarItem
+    let isSelected: Bool
+    let action: () -> Void
+    
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                Image(systemName: item.icon)
+                    .font(.title3.weight(.medium))
+                    .foregroundStyle(isSelected ? Color.white : Color("AccentColor"))
+                    .frame(width: 24, alignment: .center)
+                
+                Text(item.title)
+                    .font(.title3.weight(isSelected ? .semibold : .medium))
+                    .foregroundStyle(isSelected ? Color.white : Color.primary)
+                    .lineLimit(1)
+                
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 9)
+            .background {
+                if isSelected {
+                    RoundedRectangle(cornerRadius: 11, style: .continuous)
+                        .fill(Color("AccentColor"))
+                }
+            }
+            .contentShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
+        .listRowBackground(Color.clear)
+    }
+}
+
 extension View {
     func macToolbarSymbolStyle() -> some View {
         self
@@ -173,17 +215,21 @@ struct MacToolbarCircleIconButton: View {
     
     var body: some View {
         Button(action: action) {
-            ZStack {
-                Color.clear
-                    .frame(width: 24)
+            if let image = Self.makeSymbolImage(systemName: systemName, tint: tint) {
+                Image(uiImage: image)
+            } else {
                 Image(systemName: systemName)
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundColor(tint)
+                    .macToolbarSymbolStyle()
             }
-            .fixedSize(horizontal: true, vertical: false)
         }
-        .opacity(isDisabled ? 0.5 : 1.0)
+        .tint(nil)
         .disabled(isDisabled)
+    }
+    
+    private static func makeSymbolImage(systemName: String, tint: Color) -> UIImage? {
+        let config = UIImage.SymbolConfiguration(pointSize: 16, weight: .medium)
+        return UIImage(systemName: systemName, withConfiguration: config)?
+            .withTintColor(UIColor(tint), renderingMode: .alwaysOriginal)
     }
 }
 
