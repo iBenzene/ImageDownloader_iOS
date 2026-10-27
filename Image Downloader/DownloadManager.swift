@@ -191,12 +191,9 @@ class DownloadManager: ObservableObject {
         switch extraction {
         case .success(let urls, _):
             let manager = SavedLinksManager.shared
-            if let platform = identityPlatform(downloaderType.rawValue) {
-                let oldItems = manager.visibleItems.filter {
-                    $0.contentKey == nil && identityPlatform($0.downloaderType) == platform
-                }
-                var candidates = urls.map { ($0, downloaderType.rawValue) }
-                candidates += oldItems.map { ($0.url, $0.downloaderType) }
+            if identityPlatform(downloaderType.rawValue) != nil {
+                // 旧收藏缺少标识时只按链接查重, 不解析或修改历史记录
+                let candidates = urls.map { ($0, downloaderType.rawValue) }
                 let deadline = Date().addingTimeInterval(20)
                 var visited = Set<String>()
                 for (url, downloader) in candidates {
@@ -204,8 +201,7 @@ class DownloadManager: ObservableObject {
                     if let key = manager.visibleItems.first(where: { $0.url == url })?.contentKey {
                         resolvedContentKeys[url] = key
                     }
-                    if let key = resolvedContentKeys[url] {
-                        manager.updateContentKey(url: url, key: key)
+                    if resolvedContentKeys[url] != nil {
                         continue
                     }
                     if Date() >= deadline || Task.isCancelled {
@@ -221,7 +217,6 @@ class DownloadManager: ObservableObject {
                             url: url, downloader: downloader, serverUrl: serverUrl, token: serverToken
                         ) {
                             resolvedContentKeys[url] = key
-                            manager.updateContentKey(url: url, key: key)
                         } else {
                             identityCheckIncomplete = true
                             identityRetryAfter[url] = Date().addingTimeInterval(300)
@@ -262,7 +257,7 @@ class DownloadManager: ObservableObject {
         let keys = identityPlatform(downloaderType.rawValue) == nil ? [:] : resolvedContentKeys
         SavedLinksManager.shared.addLinks(urls: urls, downloaderType: downloaderType.rawValue, contentKeys: keys)
         let incomplete = identityPlatform(downloaderType.rawValue) != nil && identityCheckIncomplete
-        let warning = "部分新链接或旧收藏未完成内容去重，仍可能存在重复，可稍后重试补全"
+        let warning = "部分新链接未能识别内容，已按链接收藏，可能存在重复"
         func savedFeedback(_ message: String) -> HomeWorkflowFeedback {
             incomplete ? .warning(message + "。" + warning) : .success(message)
         }

@@ -112,17 +112,6 @@ class SavedLinksManager: ObservableObject {
         return visibleItems.contains { $0.url == url }
     }
 
-    func updateContentKey(url: String, key: String) {
-        var changed = false
-        for index in items.indices where items[index].url == url && items[index].contentKey != key {
-            items[index].contentKey = key
-            items[index].updatedAt = Date()
-            items[index].isDirty = true
-            changed = true
-        }
-        if changed { saveItems() }
-    }
-
     // Add a new saved link
     func addLink(url: String, downloaderType: String) {
         addLinks(urls: [url], downloaderType: downloaderType)

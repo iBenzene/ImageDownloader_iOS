@@ -207,12 +207,18 @@ final class Image_DownloaderTests: XCTestCase {
 
         manager.clearAll()
 
-        // 4. Legacy link migration and metadata persistence
+        // 4. Legacy records remain unchanged and new identities persist
         let legacyURL = "https://example.test/\(runID)/legacy"
         manager.addLink(url: legacyURL, downloaderType: ImageDownloaderType.xhsImg.rawValue)
-        assertDuplicate(await workflow.prepareSaveLinks(from: linkB, downloaderType: .xhsImg))
+        assertReady(await workflow.prepareSaveLinks(from: linkB, downloaderType: .xhsImg))
+        XCTAssertNil(manager.visibleItems.first?.contentKey)
+        assertDuplicate(await workflow.prepareSaveLinks(from: legacyURL, downloaderType: .xhsImg))
+        XCTAssertNil(manager.visibleItems.first?.contentKey)
+        _ = await workflow.saveLinks(
+            [linkB], downloaderType: .xhsImg, shouldPreheatResources: false, onProgress: { _ in }
+        )
 
-        let item = try XCTUnwrap(manager.visibleItems.first)
+        let item = try XCTUnwrap(manager.visibleItems.first(where: { $0.url == linkB }))
         XCTAssertNotNil(item.contentKey)
 
         let persisted = try JSONDecoder().decode(
@@ -227,7 +233,7 @@ final class Image_DownloaderTests: XCTestCase {
         remote.contentKey = nil
         remote.updatedAt = Date().addingTimeInterval(1)
         manager.merge(remoteRecords: [remote])
-        XCTAssertEqual(manager.visibleItems.first?.contentKey, item.contentKey)
+        XCTAssertEqual(manager.visibleItems.first(where: { $0.id == item.id })?.contentKey, item.contentKey)
 
         // Serialization compatibility check when contentKey is missing
         var json = try JSONSerialization.jsonObject(with: JSONEncoder().encode(item)) as! [String: Any]
@@ -252,7 +258,7 @@ final class Image_DownloaderTests: XCTestCase {
                 onProgress: { _ in }
             )
             XCTAssertTrue(result.feedback.isWarning)
-            XCTAssertTrue(result.feedback.message?.contains("未完成内容去重") == true)
+            XCTAssertTrue(result.feedback.message?.contains("未能识别内容") == true)
             XCTAssertTrue(manager.hasActiveLink(url: failureURL))
         }
         XCTAssertEqual(manager.visibleItems.count, 4)
@@ -329,7 +335,7 @@ final class Image_DownloaderTests: XCTestCase {
             onProgress: { _ in }
         )
         XCTAssertTrue(failedPreheat.feedback.isError)
-        XCTAssertTrue(failedPreheat.feedback.message?.contains("未完成内容去重") == true)
+        XCTAssertTrue(failedPreheat.feedback.message?.contains("未能识别内容") == true)
 
         let validPaths: Set<String> = [
             "/api/v1/resolve",
@@ -362,23 +368,31 @@ final class Image_DownloaderTests: XCTestCase {
         )
         #endif
 
-        // 11. Enough old records to exceed the 20-second budget; the next pass must resume
+        // 11. Legacy records do not add resolve requests or change during preparation
         manager.clearAll()
-        let oldURLs = (0..<145).map { "https://example.test/\(runID)/unique-backfill-\($0)" }
+        let oldURLs = (0..<145).map { "https://example.test/\(runID)/unique-legacy-\($0)" }
         manager.addLinks(urls: oldURLs, downloaderType: ImageDownloaderType.xhsImg.rawValue)
 
+        let requestsBefore = ResolveProtocol.requests.count
+        let legacyBefore = manager.visibleItems
         _ = await workflow.prepareSaveLinks(
             from: "https://example.test/\(runID)/unique-new-pass",
             downloaderType: .xhsImg
         )
         let remaining = manager.visibleItems.filter { $0.contentKey == nil }.count
-        XCTAssertGreaterThan(remaining, 0)
-        XCTAssertLessThan(remaining, oldURLs.count)
+        XCTAssertEqual(remaining, oldURLs.count)
+        XCTAssertEqual(ResolveProtocol.requests.count - requestsBefore, 1)
+        for item in legacyBefore {
+            let current = manager.visibleItems.first(where: { $0.id == item.id })
+            XCTAssertEqual(current?.updatedAt, item.updatedAt)
+            XCTAssertEqual(current?.isDirty, item.isDirty)
+        }
 
         _ = await workflow.prepareSaveLinks(
             from: "https://example.test/\(runID)/unique-new-pass",
             downloaderType: .xhsImg
         )
-        XCTAssertEqual(manager.visibleItems.filter { $0.contentKey == nil }.count, 0)
+        XCTAssertEqual(manager.visibleItems.filter { $0.contentKey == nil }.count, oldURLs.count)
+        XCTAssertEqual(ResolveProtocol.requests.count, requestsBefore + 1)
     }
 }
