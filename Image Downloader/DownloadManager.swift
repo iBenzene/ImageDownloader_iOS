@@ -255,7 +255,7 @@ class DownloadManager: ObservableObject {
         onProgress: @escaping (HomeWorkflowFeedback) -> Void
     ) async -> HomeWorkflowResult {
         let keys = identityPlatform(downloaderType.rawValue) == nil ? [:] : resolvedContentKeys
-        SavedLinksManager.shared.addLinks(urls: urls, downloaderType: downloaderType.rawValue, contentKeys: keys)
+        let savedItems = SavedLinksManager.shared.addLinks(urls: urls, downloaderType: downloaderType.rawValue, contentKeys: keys)
         let incomplete = identityPlatform(downloaderType.rawValue) != nil && identityCheckIncomplete
         let warning = "部分新链接未能识别内容，已按链接收藏，可能存在重复"
         func savedFeedback(_ message: String) -> HomeWorkflowFeedback {
@@ -269,7 +269,7 @@ class DownloadManager: ObservableObject {
             )
         }
 
-        let validUrls = urls.compactMap(URL.init(string:))
+        let validUrls = savedItems.map(\.url).compactMap(URL.init(string:))
         guard !validUrls.isEmpty else {
             return HomeWorkflowResult(
                 shouldClearInput: false,
@@ -291,9 +291,9 @@ class DownloadManager: ObservableObject {
 
         switch result {
         case .success(let cachedUrlsBySourceUrl, let cachedUrlCount):
-            for url in urls {
-                let cacheKey = URL(string: url)?.absoluteString ?? url
-                if let item = SavedLinksManager.shared.visibleItems.first(where: { $0.url == url }),
+            for savedItem in savedItems {
+                let cacheKey = URL(string: savedItem.url)?.absoluteString ?? savedItem.url
+                if let item = SavedLinksManager.shared.visibleItems.first(where: { $0.id == savedItem.id }),
                    let cachedUrls = cachedUrlsBySourceUrl[cacheKey] {
                     SavedLinksManager.shared.updateCachedUrls(for: item, cachedUrls: cachedUrls)
                 }

@@ -172,9 +172,39 @@ final class Image_DownloaderTests: XCTestCase {
             onProgress: { _ in }
         )
         XCTAssertFalse(saved.feedback.isWarning)
+        let originalItem = try XCTUnwrap(manager.visibleItems.first)
+        manager.updateStatus(for: originalItem, newStatus: .success)
+        manager.updateCachedUrls(for: originalItem, cachedUrls: ["https://media.test/cached-a.jpg"])
 
         assertDuplicate(await workflow.prepareSaveLinks(from: linkB, downloaderType: .xhsImg))
         XCTAssertEqual(manager.visibleItems.count, 1, "Preparation must not save the candidate")
+
+        // Insist on saving duplicate content with a new URL (same downloader, preheat disabled)
+        _ = await workflow.saveLinks(
+            [linkB],
+            downloaderType: .xhsImg,
+            shouldPreheatResources: false,
+            onProgress: { _ in }
+        )
+        XCTAssertEqual(manager.visibleItems.count, 1, "Re-saving duplicate content must reuse existing item")
+        let updatedItem = try XCTUnwrap(manager.visibleItems.first)
+        XCTAssertEqual(updatedItem.id, originalItem.id)
+        XCTAssertEqual(updatedItem.url, linkB)
+        XCTAssertEqual(updatedItem.status, .none)
+        XCTAssertEqual(updatedItem.cachedUrls, ["https://media.test/cached-a.jpg"])
+
+        // Changing downloader type on duplicate re-save clears cachedUrls
+        _ = await workflow.saveLinks(
+            [linkA],
+            downloaderType: .xhsVid,
+            shouldPreheatResources: false,
+            onProgress: { _ in }
+        )
+        let switchedItem = try XCTUnwrap(manager.visibleItems.first)
+        XCTAssertEqual(switchedItem.id, originalItem.id)
+        XCTAssertEqual(switchedItem.url, linkA)
+        XCTAssertEqual(switchedItem.downloaderType, ImageDownloaderType.xhsVid.rawValue)
+        XCTAssertNil(switchedItem.cachedUrls)
 
         manager.clearAll()
 
@@ -186,7 +216,8 @@ final class Image_DownloaderTests: XCTestCase {
             shouldPreheatResources: false,
             onProgress: { _ in }
         )
-        XCTAssertEqual(manager.visibleItems.count, 2)
+        XCTAssertEqual(manager.visibleItems.count, 1)
+        XCTAssertEqual(manager.visibleItems.first?.url, linkB)
         XCTAssertEqual(Set(manager.visibleItems.compactMap(\.contentKey)).count, 1)
 
         manager.clearAll()

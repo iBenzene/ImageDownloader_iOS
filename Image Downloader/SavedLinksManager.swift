@@ -18,7 +18,7 @@ enum SavedLinkStatus: String, Codable, Equatable {
 // Saved Link Item Model
 struct SavedLinkItem: Identifiable, Codable, Equatable {
     let id: UUID
-    let url: String
+    var url: String
     var timestamp: Date
     var downloaderType: String
     var status: SavedLinkStatus
@@ -113,47 +113,68 @@ class SavedLinksManager: ObservableObject {
     }
 
     // Add a new saved link
-    func addLink(url: String, downloaderType: String) {
-        addLinks(urls: [url], downloaderType: downloaderType)
+    @discardableResult
+    func addLink(url: String, downloaderType: String) -> [SavedLinkItem] {
+        return addLinks(urls: [url], downloaderType: downloaderType)
     }
     
     // Add multiple links at once
-    func addLinks(urls: [String], downloaderType: String, contentKeys: [String: String] = [:]) {
+    @discardableResult
+    func addLinks(urls: [String], downloaderType: String, contentKeys: [String: String] = [:]) -> [SavedLinkItem] {
         var needsSave = false
+        var touchedItems: [SavedLinkItem] = []
         
         for url in urls {
-            // Find all matching items (active or deleted)
-            let matchingIndices = items.indices.filter { items[$0].url == url }
+            let resolvedKey = contentKeys[url]
+            
+            // Find all matching items (active or deleted) by URL or contentKey
+            let matchingIndices = items.indices.filter { index in
+                if items[index].url == url {
+                    return true
+                }
+                if let resolvedKey, !resolvedKey.isEmpty, items[index].contentKey == resolvedKey {
+                    return true
+                }
+                return false
+            }
             
             if !matchingIndices.isEmpty {
                 // Pick primary (prefer active)
                 let winnerIndex = matchingIndices.first(where: { !items[$0].isDeleted }) ?? matchingIndices.first!
                 var winner = items[winnerIndex]
+                let wasDeleted = winner.isDeleted
+                let downloaderChanged = winner.downloaderType != downloaderType
                 
                 // Restore if deleted
-                if winner.isDeleted {
+                if wasDeleted {
                     winner.isDeleted = false
                     winner.cachedUrls = nil
-                    // winner.status = .none
+                }
+                
+                // Clear cachedUrls if downloader type changed; otherwise preserve existing cachedUrls
+                if downloaderChanged {
+                    logInfo("Updating saved link downloader: \(winner.downloaderType) -> \(downloaderType)")
+                    winner.downloaderType = downloaderType
+                    winner.cachedUrls = nil
+                } else if wasDeleted {
+                    logDebug("Restoring deleted link (same type): \(winner.downloaderType)")
+                } else {
+                    logDebug("Updating existing saved link: \(winner.url) -> \(url)")
                 }
                 
                 // Update metadata for the winner
-                winner.contentKey = contentKeys[url] ?? winner.contentKey
+                winner.url = url
+                winner.contentKey = resolvedKey ?? winner.contentKey
+                winner.status = .none
                 winner.timestamp = Date()
                 winner.updatedAt = Date()
                 winner.isDirty = true
-                if winner.downloaderType != downloaderType {
-                    logInfo("Restoring deleted link: \(winner.downloaderType) -> \(downloaderType)")
-                    winner.downloaderType = downloaderType
-                    winner.status = .none
-                } else {
-                    logDebug("Restoring deleted link (same type): \(winner.downloaderType)")
-                }
                 
                 // Mark all OTHER matches as deleted (soft delete duplicates)
                 for index in matchingIndices where index != winnerIndex {
                     if !items[index].isDeleted {
                         items[index].isDeleted = true
+                        items[index].cachedUrls = nil
                         items[index].updatedAt = Date()
                         items[index].isDirty = true
                         needsSave = true
@@ -163,13 +184,18 @@ class SavedLinksManager: ObservableObject {
                 // Move to top
                 items.remove(at: winnerIndex)
                 items.insert(winner, at: 0)
+                if let existingTouchedIndex = touchedItems.firstIndex(where: { $0.id == winner.id }) {
+                    touchedItems.remove(at: existingTouchedIndex)
+                }
+                touchedItems.append(winner)
                 needsSave = true
                 
             } else {
                 // New item
                 var item = SavedLinkItem(url: url, downloaderType: downloaderType)
-                item.contentKey = contentKeys[url]
+                item.contentKey = resolvedKey
                 items.insert(item, at: 0)
+                touchedItems.append(item)
                 needsSave = true
             }
         }
@@ -178,6 +204,8 @@ class SavedLinksManager: ObservableObject {
             items = Array(items.prefix(maxItems))
             saveItems()
         }
+        
+        return touchedItems
     }
     
     // Update status for a specific item
