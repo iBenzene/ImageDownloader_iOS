@@ -50,6 +50,9 @@ struct ContentView: View {
             NavigationStack {
                 homeContent
             }
+            .legacyHomeTabBarVisibility(
+                hidden: showingHistory || showingLivePhotoConverter
+            )
         } else {
             homeContent
         }
@@ -141,24 +144,11 @@ struct ContentView: View {
                 }
             }
         }
-        .background {
-            if showsToolNavigationInMenu {
-                // 用于跳转到「实况图片转换器」页面
-                NavigationLink(
-                    destination: LivePhotoConverterView(),
-                    isActive: $showingLivePhotoConverter,
-                    label: { EmptyView() }
-                )
-                .hidden()
-                
-                // 用于跳转到「下载记录」页面
-                NavigationLink(
-                    destination: HistoryView(),
-                    isActive: $showingHistory,
-                    label: { EmptyView() }
-                )
-                .hidden()
-            }
+        .navigationDestination(isPresented: $showingLivePhotoConverter) {
+            LivePhotoConverterView()
+        }
+        .navigationDestination(isPresented: $showingHistory) {
+            HistoryView()
         }
         .alert("重复链接提醒", isPresented: $state.showingDuplicateAlert) {
             Button("取消", role: .cancel) {
@@ -568,6 +558,17 @@ private struct HomeScrollOffsetPreferenceKey: PreferenceKey {
 }
 
 private extension View {
+    @ViewBuilder
+    func legacyHomeTabBarVisibility(hidden: Bool) -> some View {
+        if #unavailable(iOS 26) {
+            // Older SwiftUI versions can lose destination tab-bar preferences.
+            // Drive visibility from the tab's NavigationStack, including on pop.
+            self.toolbar(hidden ? .hidden : .visible, for: .tabBar)
+        } else {
+            self
+        }
+    }
+
     @ViewBuilder
     func homeSeamlessTabBar() -> some View {
         if #unavailable(iOS 26) {
